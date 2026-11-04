@@ -426,13 +426,16 @@ class _DuoTabBarState extends State<DuoTabBar> {
     final bool isEffective = scope?.isEffectiveDuo ?? false;
     final bool shouldRelocateBottomNav =
         scope?.shouldRelocateBottomNav ?? false;
+    final bool flagsChanged =
+        _isEffectiveDuo != isEffective ||
+        _shouldRelocateBottomNav != shouldRelocateBottomNav;
     _isEffectiveDuo = isEffective;
     _shouldRelocateBottomNav = shouldRelocateBottomNav;
 
     if (scope == null || (!isEffective && !shouldRelocateBottomNav)) {
       scope?.registry.unregister(_sourceId);
       scope?.bottomNavRegistry?.unregister(_sourceId);
-      setState(() {});
+      if (flagsChanged) setState(() {});
       return;
     }
 
@@ -458,7 +461,7 @@ class _DuoTabBarState extends State<DuoTabBar> {
       } else {
         scope.bottomNavRegistry?.unregister(_sourceId);
       }
-      setState(() {});
+      if (flagsChanged) setState(() {});
       return;
     }
 
@@ -466,7 +469,7 @@ class _DuoTabBarState extends State<DuoTabBar> {
     scope.bottomNavRegistry?.unregister(_sourceId);
     if (!isEffective) {
       scope.registry.unregister(_sourceId);
-      setState(() {});
+      if (flagsChanged) setState(() {});
       return;
     }
     if (child is FloatingActionButton) {
