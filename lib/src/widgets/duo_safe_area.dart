@@ -80,10 +80,12 @@ class DuoSafeArea extends StatefulWidget {
   State<DuoSafeArea> createState() => _DuoSafeAreaState();
 }
 
+const MethodChannel _deviceChannel = MethodChannel(
+  'foldable_devices_ui/device',
+);
+
 class _DuoSafeAreaState extends State<DuoSafeArea> {
-  static const MethodChannel _toolbarChannel = MethodChannel(
-    'foldable_devices_ui/device',
-  );
+  static const MethodChannel _toolbarChannel = _deviceChannel;
   static const String _groupedActionsId = 'duo.groupedActions';
 
   late final AppActionRegistry _actionRegistry;
@@ -456,6 +458,18 @@ class _DuoSafeAreaScope extends InheritedWidget {
   }
 }
 
+class _DuoBarLayoutInsets {
+  const _DuoBarLayoutInsets({
+    this.top = 0.0,
+    this.bottom = 16.0,
+    this.hasPunchHoleAtBottom = false,
+  });
+
+  final double top;
+  final double bottom;
+  final bool hasPunchHoleAtBottom;
+}
+
 class _DuoPageWrapper extends StatefulWidget {
   const _DuoPageWrapper({
     required this.isIphoneDuo,
@@ -477,9 +491,54 @@ class _DuoPageWrapper extends StatefulWidget {
   State<_DuoPageWrapper> createState() => _DuoPageWrapperState();
 }
 
-class _DuoPageWrapperState extends State<_DuoPageWrapper> {
+class _DuoPageWrapperState extends State<_DuoPageWrapper>
+    with WidgetsBindingObserver {
   final DuoBottomNavRegistry _bottomNavRegistry = DuoBottomNavRegistry();
   final GlobalKey _pageContentKey = GlobalKey();
+  _DuoBarLayoutInsets _barInsets = const _DuoBarLayoutInsets();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.isIphoneDuo) {
+      _queryBarInsets();
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (widget.isIphoneDuo) {
+      _queryBarInsets();
+    }
+  }
+
+  Future<void> _queryBarInsets() async {
+    try {
+      final Map<Object?, Object?>? res =
+          await _deviceChannel.invokeMethod<Map<Object?, Object?>>(
+        'getBarLayoutInsets',
+      );
+      if (!mounted || res == null) return;
+      final double top = (res['top'] as num?)?.toDouble() ?? 0.0;
+      final double bottom = (res['bottom'] as num?)?.toDouble() ?? 16.0;
+      final bool hasHoleAtBottom =
+          (res['hasPunchHoleAtBottom'] as bool?) ?? (bottom >= 80.0);
+      final _DuoBarLayoutInsets newInsets = _DuoBarLayoutInsets(
+        top: top,
+        bottom: bottom,
+        hasPunchHoleAtBottom: hasHoleAtBottom,
+      );
+      if (_barInsets.top != newInsets.top ||
+          _barInsets.bottom != newInsets.bottom ||
+          _barInsets.hasPunchHoleAtBottom != newInsets.hasPunchHoleAtBottom) {
+        setState(() {
+          _barInsets = newInsets;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void reassemble() {
@@ -489,6 +548,7 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _bottomNavRegistry.dispose();
     super.dispose();
   }
@@ -525,6 +585,7 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper> {
           widget.backgroundColor,
           _bottomNavRegistry,
           isSubDisplay: !widget.deviceWidthState.state,
+          barInsets: _barInsets,
         );
       },
     );
@@ -611,6 +672,7 @@ Widget _duoToolbarSafeArea(
   Color? backgroundColor,
   DuoBottomNavRegistry bottomNavRegistry, {
   bool isSubDisplay = false,
+  _DuoBarLayoutInsets barInsets = const _DuoBarLayoutInsets(),
 }) {
   final Widget safeArea = SafeArea(
     left: true,
@@ -635,8 +697,17 @@ Widget _duoToolbarSafeArea(
       final double sideStripWidth = isLeftEdge
           ? padding.left
           : (padding.right > 0 ? padding.right : 68.0);
-      // On the sub-display (Outer Display), avoid the corner punch-hole region.
-      final double minBottomInset = isSubDisplay ? 112.0 : 16.0;
+      // Sub-display Dynamic Island / punch-hole avoidance:
+      // When the device is rotated 180° so the Dynamic Island sits at the bottom,
+      // lift the vertical bar (bottom: 112.0) to avoid the camera cutout.
+      // When the Dynamic Island sits at the top (or vertical), place the bar at
+      // the bottom (16.0) so it does not collide with the top UIKit toolbar.
+      final double minBottomInset;
+      if (barInsets.hasPunchHoleAtBottom) {
+        minBottomInset = barInsets.bottom > 112.0 ? barInsets.bottom : 112.0;
+      } else {
+        minBottomInset = 16.0;
+      }
       final double bottomInset =
           padding.bottom > minBottomInset ? padding.bottom : minBottomInset;
 

@@ -57,6 +57,38 @@ public class FoldableDevicesUiPlugin: NSObject, FlutterPlugin {
       }
       updateToolbarItems(arguments, on: navigationController)
       result(nil)
+    case "getBarLayoutInsets":
+      guard Self.isIphoneDuo,
+            let window = Self.hostWindow()
+      else {
+        result([
+          "top": 0.0,
+          "bottom": 16.0,
+          "hasPunchHoleAtBottom": false,
+        ])
+        return
+      }
+
+      let orientation: UIInterfaceOrientation
+      if #available(iOS 13.0, *), let scene = window.windowScene {
+        orientation = scene.interfaceOrientation
+      } else {
+        orientation = UIApplication.shared.statusBarOrientation
+      }
+
+      // On iPhone Duo Outer Display in landscape orientation:
+      // - landscapeRight: Dynamic Island is at the top-left, so bottom has NO punch-hole (bottom: 16.0)
+      // - landscapeLeft: Dynamic Island is rotated 180° to the bottom, so bottom HAS punch-hole (bottom: 112.0)
+      // - portrait / portraitUpsideDown: Dynamic Island does not collide with bottom bar (bottom: 16.0)
+      let hasPunchHoleAtBottom = (orientation == .landscapeLeft)
+      let bottomInset: Double = hasPunchHoleAtBottom ? 112.0 : 16.0
+      let topInset: Double = (orientation == .landscapeRight) ? 82.0 : 0.0
+
+      result([
+        "top": topInset,
+        "bottom": bottomInset,
+        "hasPunchHoleAtBottom": hasPunchHoleAtBottom,
+      ])
     default:
       result(FlutterMethodNotImplemented)
     }

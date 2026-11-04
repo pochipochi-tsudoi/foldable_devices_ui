@@ -33,6 +33,8 @@ class DuoBottomNavEntry {
     this.selectedItemColor,
     this.unselectedItemColor,
     this.backgroundColor,
+    this.showSelectedLabels = true,
+    this.showUnselectedLabels = true,
   });
 
   final List<DuoBottomNavItem> items;
@@ -42,6 +44,8 @@ class DuoBottomNavEntry {
   final Color? selectedItemColor;
   final Color? unselectedItemColor;
   final Color? backgroundColor;
+  final bool showSelectedLabels;
+  final bool showUnselectedLabels;
 
   /// Extracts a [DuoBottomNavEntry] from a [BottomNavigationBar].
   static DuoBottomNavEntry? tryFromWidget(
@@ -73,6 +77,8 @@ class DuoBottomNavEntry {
         selectedItemColor: child.selectedItemColor ?? child.fixedColor,
         unselectedItemColor: child.unselectedItemColor,
         backgroundColor: child.backgroundColor,
+        showSelectedLabels: child.showSelectedLabels ?? true,
+        showUnselectedLabels: child.showUnselectedLabels ?? true,
       );
     }
     return null;
@@ -203,11 +209,11 @@ class DuoVerticalBottomNav extends StatelessWidget {
         : Colors.black.withValues(alpha: 0.10);
 
     Widget pillContent = Container(
-      width: 48,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      width: 60,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(30),
         border: Border.all(color: borderColor, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -224,12 +230,15 @@ class DuoVerticalBottomNav extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             for (int i = 0; i < entry.items.length; i++) ...<Widget>[
-              if (i > 0) const SizedBox(height: 4),
+              if (i > 0) const SizedBox(height: 10),
               _DuoVerticalBottomNavItemButton(
                 item: entry.items[i],
                 isSelected: i == entry.selectedIndex,
                 selectedColor: selectedColor,
                 unselectedColor: unselectedColor,
+                showLabel: i == entry.selectedIndex
+                    ? entry.showSelectedLabels
+                    : entry.showUnselectedLabels,
                 onTap: entry.onSelected == null
                     ? null
                     : () => entry.onSelected!(i),
@@ -242,7 +251,7 @@ class DuoVerticalBottomNav extends StatelessWidget {
 
     if (entry.useIndependence) {
       pillContent = ClipRRect(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(30),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: pillContent,
@@ -263,6 +272,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
     required this.isSelected,
     required this.selectedColor,
     required this.unselectedColor,
+    required this.showLabel,
     required this.onTap,
   });
 
@@ -270,12 +280,17 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
   final bool isSelected;
   final Color selectedColor;
   final Color unselectedColor;
+  final bool showLabel;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final Widget iconWidget = isSelected ? item.selectedIcon : item.icon;
-    final String? tooltipText = item.tooltip ?? item.label;
+    final String? labelText = item.label;
+    final String? tooltipText = item.tooltip ?? labelText;
+    final Color activeColor = isSelected ? selectedColor : unselectedColor;
+    final bool hasVisibleLabel =
+        showLabel && labelText != null && labelText.isNotEmpty;
 
     Widget button = Semantics(
       label: tooltipText,
@@ -284,23 +299,47 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
       enabled: onTap != null,
       child: InkWell(
         onTap: onTap,
-        customBorder: const StadiumBorder(),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          width: 40,
-          height: 40,
+          width: 48,
+          padding: EdgeInsets.symmetric(
+            vertical: hasVisibleLabel ? 8 : 10,
+            horizontal: 4,
+          ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected
                 ? selectedColor.withValues(alpha: 0.16)
                 : Colors.transparent,
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: IconTheme.merge(
-            data: IconThemeData(
-              color: isSelected ? selectedColor : unselectedColor,
-              size: 22,
-            ),
-            child: iconWidget,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconTheme.merge(
+                data: IconThemeData(
+                  color: activeColor,
+                  size: 20,
+                ),
+                child: iconWidget,
+              ),
+              if (hasVisibleLabel) ...<Widget>[
+                const SizedBox(height: 4),
+                Text(
+                  labelText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    height: 1.1,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: activeColor,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
