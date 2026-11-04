@@ -10,6 +10,7 @@
 .svn/
 migrate_working_dir/
 *.docs/report
+*AGENTS.md
 
 # IntelliJ related
 *.iml

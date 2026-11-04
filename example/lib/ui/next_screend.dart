@@ -10,6 +10,8 @@ class NextScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        /// Set [automaticallyImplyLeading] to false to prevent duplicate back buttons on iPhone Duo.
+        automaticallyImplyLeading: false,
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('Information'),
       ),
