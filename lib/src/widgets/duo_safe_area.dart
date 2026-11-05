@@ -698,12 +698,14 @@ Widget _duoToolbarSafeArea(
           ? padding.left
           : (padding.right > 0 ? padding.right : 68.0);
       // Sub-display Dynamic Island / punch-hole avoidance:
-      // When the device is rotated 180° so the Dynamic Island sits at the bottom,
-      // lift the vertical bar (bottom: 112.0) to avoid the camera cutout.
-      // When the Dynamic Island sits at the top (or vertical), place the bar at
-      // the bottom (16.0) so it does not collide with the top UIKit toolbar.
+      // Only on the folded sub-display (isSubDisplay) when the device is rotated
+      // 180° so the Dynamic Island sits at the bottom, lift the vertical bar
+      // (bottom: 112.0) to avoid the camera cutout.
+      // On the unfolded inner display (!isSubDisplay), or when the Dynamic Island
+      // sits at the top / in portrait, place the bar at the bottom (16.0) so
+      // there is no giant bottom margin.
       final double minBottomInset;
-      if (barInsets.hasPunchHoleAtBottom) {
+      if (isSubDisplay && barInsets.hasPunchHoleAtBottom) {
         minBottomInset = barInsets.bottom > 112.0 ? barInsets.bottom : 112.0;
       } else {
         minBottomInset = 16.0;
