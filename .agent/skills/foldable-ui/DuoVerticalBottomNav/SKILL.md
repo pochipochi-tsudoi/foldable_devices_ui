@@ -11,7 +11,7 @@ description: >-
 
 Source: [`lib/src/widgets/duo_tab_bar.dart`](../../../../lib/src/widgets/duo_tab_bar.dart)
 
-`DuoVerticalBottomNav` is a Flutter widget that renders a vertical pill-shaped navigation bar (`width: 60pt`, with icon + label stacked vertically in each item button) inside the iPhone Duo side safe-area strip.
+`DuoVerticalBottomNav` is a Flutter widget that renders a vertical pill-shaped navigation bar (`width: 62pt`, with icon (size 24) + label stacked vertically in each item button) inside the iPhone Duo side safe-area strip.
 
 In standard usage, developers do **not** need to instantiate `DuoVerticalBottomNav` manually—wrapping a `BottomNavigationBar` in [`DuoTabBar`](../DuoTabBar/SKILL.md) inside [`DuoSafeArea`](../DuoSafeArea/SKILL.md) automatically extracts a `DuoBottomNavEntry` and positions `DuoVerticalBottomNav` in the side safe-area strip.
 

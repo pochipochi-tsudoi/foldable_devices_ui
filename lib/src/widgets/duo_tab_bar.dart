@@ -209,11 +209,11 @@ class DuoVerticalBottomNav extends StatelessWidget {
         : Colors.black.withValues(alpha: 0.10);
 
     Widget pillContent = Container(
-      width: 60,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+      width: 62,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 5),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(31),
         border: Border.all(color: borderColor, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -230,7 +230,7 @@ class DuoVerticalBottomNav extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             for (int i = 0; i < entry.items.length; i++) ...<Widget>[
-              if (i > 0) const SizedBox(height: 10),
+              if (i > 0) const SizedBox(height: 12),
               _DuoVerticalBottomNavItemButton(
                 item: entry.items[i],
                 isSelected: i == entry.selectedIndex,
@@ -251,7 +251,7 @@ class DuoVerticalBottomNav extends StatelessWidget {
 
     if (entry.useIndependence) {
       pillContent = ClipRRect(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(31),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: pillContent,
@@ -299,11 +299,11 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
       enabled: onTap != null,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
-          width: 48,
+          width: 52,
           padding: EdgeInsets.symmetric(
-            vertical: hasVisibleLabel ? 8 : 10,
+            vertical: hasVisibleLabel ? 9 : 11,
             horizontal: 4,
           ),
           alignment: Alignment.center,
@@ -311,7 +311,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
             color: isSelected
                 ? selectedColor.withValues(alpha: 0.16)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -319,7 +319,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
               IconTheme.merge(
                 data: IconThemeData(
                   color: activeColor,
-                  size: 20,
+                  size: 24,
                 ),
                 child: iconWidget,
               ),
@@ -332,7 +332,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 9.5,
-                    height: 1.1,
+                    height: 1.15,
                     fontWeight:
                         isSelected ? FontWeight.w600 : FontWeight.w500,
                     color: activeColor,
