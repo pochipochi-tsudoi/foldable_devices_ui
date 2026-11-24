@@ -1,7 +1,10 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as legacy_material;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart' as modern_material;
 
 import '../platform/duo_device_info.dart';
 import '../state/width_state.dart';
@@ -11,17 +14,17 @@ import 'duo_tab_bar.dart';
 /// Applies the side safe-area insets to each Material route on iPhone Duo,
 /// except [exception] widget types.
 ///
-/// Wrap a Navigator-based [MaterialApp] once:
+/// Wrap a MaterialApp (Navigator-based or router-based such as `go_router`) once:
 ///
 /// ```dart
 /// DuoSafeArea(
 ///   exception: const [FullScreenPage],
 ///   backgroundColor: Colors.black,
-///   child: MaterialApp(home: const HomePage()),
+///   child: MaterialApp.router(routerConfig: router),
 /// )
 /// ```
 ///
-/// For imperative navigation with [Navigator.push], use [DuoSafeArea.route]
+/// For imperative navigation with `Navigator.push`, use [DuoSafeArea.route]
 /// to create the route so its page can be checked against [exception].
 class DuoSafeArea extends StatefulWidget {
   const DuoSafeArea({
@@ -29,7 +32,12 @@ class DuoSafeArea extends StatefulWidget {
     this.exception = const <Type>[],
     this.backgroundColor,
     required this.child,
-  }) : assert(child is MaterialApp, 'DuoSafeArea.child must be a MaterialApp.');
+  }) : assert(
+         child is modern_material.MaterialApp ||
+             // ignore: deprecated_member_use
+             child is legacy_material.MaterialApp,
+         'DuoSafeArea.child must be a MaterialApp.',
+       );
 
   /// Widget runtime types that should not receive the automatic [SafeArea].
   final List<Type> exception;
@@ -40,14 +48,22 @@ class DuoSafeArea extends StatefulWidget {
   /// Defaults to transparent.
   final Color? backgroundColor;
 
-  /// The Navigator-based MaterialApp whose routes will receive SafeArea.
+  /// The MaterialApp whose routes will receive DuoSafeArea handling.
   final Widget child;
+
+  /// Wraps [page] with the nearest ancestor [DuoSafeArea] configuration.
+  static Widget wrapPage(BuildContext context, Widget page) {
+    final _DuoSafeAreaScope? scope = context
+        .dependOnInheritedWidgetOfExactType<_DuoSafeAreaScope>();
+    return scope?.wrap(page) ?? page;
+  }
 
   /// Creates a MaterialPageRoute that participates in DuoSafeArea handling.
   ///
   /// Use this for imperative pushes. Routes pushed directly with
   /// `MaterialPageRoute` bypass the route builders configured by MaterialApp.
-  static MaterialPageRoute<T> route<T>({
+  // ignore: deprecated_member_use
+  static legacy_material.MaterialPageRoute<T> route<T>({
     required WidgetBuilder builder,
     RouteSettings? settings,
     bool maintainState = true,
@@ -58,13 +74,9 @@ class DuoSafeArea extends StatefulWidget {
     TraversalEdgeBehavior? traversalEdgeBehavior,
     TraversalEdgeBehavior? directionalTraversalEdgeBehavior,
   }) {
-    return MaterialPageRoute<T>(
-      builder: (context) {
-        final Widget page = builder(context);
-        final _DuoSafeAreaScope? scope = context
-            .dependOnInheritedWidgetOfExactType<_DuoSafeAreaScope>();
-        return scope?.wrap(page) ?? page;
-      },
+    // ignore: deprecated_member_use
+    return legacy_material.MaterialPageRoute<T>(
+      builder: (context) => wrapPage(context, builder(context)),
       settings: settings,
       maintainState: maintainState,
       fullscreenDialog: fullscreenDialog,
@@ -118,7 +130,7 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
   Future<void> _ensureGroupedMoreIcon() async {
     if (_groupedMoreIconBytes != null) return;
     final Uint8List? bytes = await rasterizeDefaultToolbarIcon(
-      const Icon(Icons.more_horiz),
+      const Icon(modern_material.Icons.more_horiz),
     );
     if (!mounted || bytes == null) return;
     _groupedMoreIconBytes = bytes;
@@ -182,7 +194,8 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
       return;
     }
 
-    final NavigatorState? navigator = _actionNavigatorObserver.navigator;
+    final NavigatorState? navigator =
+        _actionNavigatorObserver.navigator ?? _actionRegistry.rootNavigator;
     final BuildContext? navContext =
         navigator?.overlay?.context ?? navigator?.context;
     if (navContext == null || !navContext.mounted) {
@@ -309,53 +322,124 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
         .catchError((Object _) {});
   }
 
-  Widget _wrapPage(Widget page) {
+  Widget _wrapPage(
+    Widget page, {
+    required bool useModernMaterial,
+    bool isRouterRoot = false,
+  }) {
     return _DuoPageWrapper(
       isIphoneDuo: _isIphoneDuo,
-      isException: widget.exception.contains(page.runtimeType),
+      isException: !isRouterRoot && widget.exception.contains(page.runtimeType),
       backgroundColor: widget.backgroundColor,
       actionRegistry: _actionRegistry,
       deviceWidthState: _deviceWidthState,
+      useModernMaterial: useModernMaterial,
+      isRouterRoot: isRouterRoot,
       page: page,
     );
   }
 
   Route<dynamic>? _wrapRoute(Route<dynamic>? route) {
-    if (route is! MaterialPageRoute<dynamic>) {
-      return route;
+    if (route is modern_material.MaterialPageRoute<dynamic>) {
+      return modern_material.MaterialPageRoute<dynamic>(
+        builder: (context) =>
+            _wrapPage(route.builder(context), useModernMaterial: true),
+        settings: route.settings,
+        maintainState: route.maintainState,
+        fullscreenDialog: route.fullscreenDialog,
+        requestFocus: route.requestFocus,
+        allowSnapshotting: route.allowSnapshotting,
+        barrierDismissible: route.barrierDismissible,
+        traversalEdgeBehavior: route.traversalEdgeBehavior,
+        directionalTraversalEdgeBehavior:
+            route.directionalTraversalEdgeBehavior,
+      );
     }
-
-    return MaterialPageRoute<dynamic>(
-      builder: (context) => _wrapPage(route.builder(context)),
-      settings: route.settings,
-      maintainState: route.maintainState,
-      fullscreenDialog: route.fullscreenDialog,
-      requestFocus: route.requestFocus,
-      allowSnapshotting: route.allowSnapshotting,
-      barrierDismissible: route.barrierDismissible,
-      traversalEdgeBehavior: route.traversalEdgeBehavior,
-      directionalTraversalEdgeBehavior: route.directionalTraversalEdgeBehavior,
-    );
+    // ignore: deprecated_member_use
+    if (route is legacy_material.MaterialPageRoute<dynamic>) {
+      // ignore: deprecated_member_use
+      return legacy_material.MaterialPageRoute<dynamic>(
+        builder: (context) =>
+            _wrapPage(route.builder(context), useModernMaterial: false),
+        settings: route.settings,
+        maintainState: route.maintainState,
+        fullscreenDialog: route.fullscreenDialog,
+        requestFocus: route.requestFocus,
+        allowSnapshotting: route.allowSnapshotting,
+        barrierDismissible: route.barrierDismissible,
+        traversalEdgeBehavior: route.traversalEdgeBehavior,
+        directionalTraversalEdgeBehavior:
+            route.directionalTraversalEdgeBehavior,
+      );
+    }
+    return route;
   }
 
-  MaterialApp _buildMaterialApp(MaterialApp app) {
+  modern_material.MaterialApp _buildModernMaterialApp(
+    modern_material.MaterialApp app,
+  ) {
     if (app.routerConfig != null || app.routerDelegate != null) {
-      throw FlutterError(
-        'DuoSafeArea currently supports Navigator-based MaterialApp, '
-        'not MaterialApp.router.',
+      return modern_material.MaterialApp.router(
+        key: app.key,
+        scaffoldMessengerKey: app.scaffoldMessengerKey,
+        routeInformationProvider: app.routeInformationProvider,
+        routeInformationParser: app.routeInformationParser,
+        routerDelegate: app.routerDelegate,
+        routerConfig: app.routerConfig,
+        backButtonDispatcher: app.backButtonDispatcher,
+        onNavigationNotification: app.onNavigationNotification,
+        builder: (context, child) {
+          final Widget built = app.builder != null
+              ? app.builder!(context, child)
+              : (child ?? const SizedBox.shrink());
+          return _wrapPage(
+            built,
+            useModernMaterial: true,
+            isRouterRoot: true,
+          );
+        },
+        title: app.title,
+        onGenerateTitle: app.onGenerateTitle,
+        color: app.color,
+        theme: app.theme,
+        darkTheme: app.darkTheme,
+        highContrastTheme: app.highContrastTheme,
+        highContrastDarkTheme: app.highContrastDarkTheme,
+        themeMode: app.themeMode,
+        themeAnimationDuration: app.themeAnimationDuration,
+        themeAnimationCurve: app.themeAnimationCurve,
+        locale: app.locale,
+        localizationsDelegates: app.localizationsDelegates,
+        localeListResolutionCallback: app.localeListResolutionCallback,
+        localeResolutionCallback: app.localeResolutionCallback,
+        supportedLocales: app.supportedLocales,
+        debugShowMaterialGrid: app.debugShowMaterialGrid,
+        showPerformanceOverlay: app.showPerformanceOverlay,
+        checkerboardRasterCacheImages: app.checkerboardRasterCacheImages,
+        checkerboardOffscreenLayers: app.checkerboardOffscreenLayers,
+        showSemanticsDebugger: app.showSemanticsDebugger,
+        debugShowCheckedModeBanner: app.debugShowCheckedModeBanner,
+        shortcuts: app.shortcuts,
+        actions: app.actions,
+        restorationScopeId: app.restorationScopeId,
+        scrollBehavior: app.scrollBehavior,
+        themeAnimationStyle: app.themeAnimationStyle,
       );
     }
 
     final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
       for (final MapEntry<String, WidgetBuilder> entry in app.routes!.entries)
-        entry.key: (BuildContext context) => _wrapPage(entry.value(context)),
+        entry.key: (BuildContext context) =>
+            _wrapPage(entry.value(context), useModernMaterial: true),
     };
 
-    return MaterialApp(
+    return modern_material.MaterialApp(
       key: app.key,
       navigatorKey: app.navigatorKey,
       scaffoldMessengerKey: app.scaffoldMessengerKey,
-      home: app.home == null ? null : _wrapPage(app.home!),
+      home: app.home == null
+          ? null
+          : _wrapPage(app.home!, useModernMaterial: true),
       routes: routes,
       initialRoute: app.initialRoute,
       onGenerateRoute: app.onGenerateRoute == null
@@ -375,7 +459,124 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
         _actionNavigatorObserver,
       ],
       builder: app.builder,
-      title: app.title,
+      title: app.title ?? '',
+      onGenerateTitle: app.onGenerateTitle,
+      color: app.color,
+      theme: app.theme,
+      darkTheme: app.darkTheme,
+      highContrastTheme: app.highContrastTheme,
+      highContrastDarkTheme: app.highContrastDarkTheme,
+      themeMode: app.themeMode,
+      themeAnimationDuration: app.themeAnimationDuration,
+      themeAnimationCurve: app.themeAnimationCurve,
+      locale: app.locale,
+      localizationsDelegates: app.localizationsDelegates,
+      localeListResolutionCallback: app.localeListResolutionCallback,
+      localeResolutionCallback: app.localeResolutionCallback,
+      supportedLocales: app.supportedLocales,
+      debugShowMaterialGrid: app.debugShowMaterialGrid,
+      showPerformanceOverlay: app.showPerformanceOverlay,
+      checkerboardRasterCacheImages: app.checkerboardRasterCacheImages,
+      checkerboardOffscreenLayers: app.checkerboardOffscreenLayers,
+      showSemanticsDebugger: app.showSemanticsDebugger,
+      debugShowCheckedModeBanner: app.debugShowCheckedModeBanner,
+      shortcuts: app.shortcuts,
+      actions: app.actions,
+      restorationScopeId: app.restorationScopeId,
+      scrollBehavior: app.scrollBehavior,
+      themeAnimationStyle: app.themeAnimationStyle,
+    );
+  }
+
+  // ignore: deprecated_member_use
+  legacy_material.MaterialApp _buildLegacyMaterialApp(
+    // ignore: deprecated_member_use
+    legacy_material.MaterialApp app,
+  ) {
+    if (app.routerConfig != null || app.routerDelegate != null) {
+      // ignore: deprecated_member_use
+      return legacy_material.MaterialApp.router(
+        key: app.key,
+        scaffoldMessengerKey: app.scaffoldMessengerKey,
+        routeInformationProvider: app.routeInformationProvider,
+        routeInformationParser: app.routeInformationParser,
+        routerDelegate: app.routerDelegate,
+        routerConfig: app.routerConfig,
+        backButtonDispatcher: app.backButtonDispatcher,
+        onNavigationNotification: app.onNavigationNotification,
+        builder: (context, child) {
+          final Widget built = app.builder != null
+              ? app.builder!(context, child)
+              : (child ?? const SizedBox.shrink());
+          return _wrapPage(
+            built,
+            useModernMaterial: false,
+            isRouterRoot: true,
+          );
+        },
+        title: app.title,
+        onGenerateTitle: app.onGenerateTitle,
+        color: app.color,
+        theme: app.theme,
+        darkTheme: app.darkTheme,
+        highContrastTheme: app.highContrastTheme,
+        highContrastDarkTheme: app.highContrastDarkTheme,
+        themeMode: app.themeMode,
+        themeAnimationDuration: app.themeAnimationDuration,
+        themeAnimationCurve: app.themeAnimationCurve,
+        locale: app.locale,
+        localizationsDelegates: app.localizationsDelegates,
+        localeListResolutionCallback: app.localeListResolutionCallback,
+        localeResolutionCallback: app.localeResolutionCallback,
+        supportedLocales: app.supportedLocales,
+        debugShowMaterialGrid: app.debugShowMaterialGrid,
+        showPerformanceOverlay: app.showPerformanceOverlay,
+        checkerboardRasterCacheImages: app.checkerboardRasterCacheImages,
+        checkerboardOffscreenLayers: app.checkerboardOffscreenLayers,
+        showSemanticsDebugger: app.showSemanticsDebugger,
+        debugShowCheckedModeBanner: app.debugShowCheckedModeBanner,
+        shortcuts: app.shortcuts,
+        actions: app.actions,
+        restorationScopeId: app.restorationScopeId,
+        scrollBehavior: app.scrollBehavior,
+        themeAnimationStyle: app.themeAnimationStyle,
+      );
+    }
+
+    final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
+      for (final MapEntry<String, WidgetBuilder> entry in app.routes!.entries)
+        entry.key: (BuildContext context) =>
+            _wrapPage(entry.value(context), useModernMaterial: false),
+    };
+
+    // ignore: deprecated_member_use
+    return legacy_material.MaterialApp(
+      key: app.key,
+      navigatorKey: app.navigatorKey,
+      scaffoldMessengerKey: app.scaffoldMessengerKey,
+      home: app.home == null
+          ? null
+          : _wrapPage(app.home!, useModernMaterial: false),
+      routes: routes,
+      initialRoute: app.initialRoute,
+      onGenerateRoute: app.onGenerateRoute == null
+          ? null
+          : (settings) => _wrapRoute(app.onGenerateRoute!(settings)),
+      onGenerateInitialRoutes: app.onGenerateInitialRoutes == null
+          ? null
+          : (initialRoute) => app.onGenerateInitialRoutes!(initialRoute)
+                .map((route) => _wrapRoute(route) ?? route)
+                .toList(growable: false),
+      onUnknownRoute: app.onUnknownRoute == null
+          ? null
+          : (settings) => _wrapRoute(app.onUnknownRoute!(settings)),
+      onNavigationNotification: app.onNavigationNotification,
+      navigatorObservers: <NavigatorObserver>[
+        ...?app.navigatorObservers,
+        _actionNavigatorObserver,
+      ],
+      builder: app.builder,
+      title: app.title ?? '',
       onGenerateTitle: app.onGenerateTitle,
       color: app.color,
       theme: app.theme,
@@ -407,7 +608,16 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
   @override
   Widget build(BuildContext context) {
     final Widget child = widget.child;
-    if (child is! MaterialApp) {
+    final bool useModernMaterial;
+    final Widget builtApp;
+    if (child is modern_material.MaterialApp) {
+      useModernMaterial = true;
+      builtApp = _buildModernMaterialApp(child);
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.MaterialApp) {
+      useModernMaterial = false;
+      builtApp = _buildLegacyMaterialApp(child);
+    } else {
       throw FlutterError('DuoSafeArea.child must be a MaterialApp.');
     }
 
@@ -417,7 +627,8 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
       backgroundColor: widget.backgroundColor,
       registry: _actionRegistry,
       deviceWidthState: _deviceWidthState,
-      child: _buildMaterialApp(child),
+      useModernMaterial: useModernMaterial,
+      child: builtApp,
     );
   }
 }
@@ -429,6 +640,7 @@ class _DuoSafeAreaScope extends InheritedWidget {
     required this.backgroundColor,
     required this.registry,
     required this.deviceWidthState,
+    required this.useModernMaterial,
     required super.child,
   });
 
@@ -437,6 +649,7 @@ class _DuoSafeAreaScope extends InheritedWidget {
   final Color? backgroundColor;
   final AppActionRegistry registry;
   final DeviceWidthState deviceWidthState;
+  final bool useModernMaterial;
 
   Widget wrap(Widget page) {
     return _DuoPageWrapper(
@@ -445,6 +658,7 @@ class _DuoSafeAreaScope extends InheritedWidget {
       backgroundColor: backgroundColor,
       actionRegistry: registry,
       deviceWidthState: deviceWidthState,
+      useModernMaterial: useModernMaterial,
       page: page,
     );
   }
@@ -454,7 +668,8 @@ class _DuoSafeAreaScope extends InheritedWidget {
     return isIphoneDuo != oldWidget.isIphoneDuo ||
         !listEquals(exception, oldWidget.exception) ||
         backgroundColor != oldWidget.backgroundColor ||
-        deviceWidthState != oldWidget.deviceWidthState;
+        deviceWidthState != oldWidget.deviceWidthState ||
+        useModernMaterial != oldWidget.useModernMaterial;
   }
 }
 
@@ -477,6 +692,8 @@ class _DuoPageWrapper extends StatefulWidget {
     required this.backgroundColor,
     required this.actionRegistry,
     required this.deviceWidthState,
+    required this.useModernMaterial,
+    this.isRouterRoot = false,
     required this.page,
   });
 
@@ -485,6 +702,8 @@ class _DuoPageWrapper extends StatefulWidget {
   final Color? backgroundColor;
   final AppActionRegistry actionRegistry;
   final DeviceWidthState deviceWidthState;
+  final bool useModernMaterial;
+  final bool isRouterRoot;
   final Widget page;
 
   @override
@@ -496,6 +715,7 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
   final DuoBottomNavRegistry _bottomNavRegistry = DuoBottomNavRegistry();
   final GlobalKey _pageContentKey = GlobalKey();
   _DuoBarLayoutInsets _barInsets = const _DuoBarLayoutInsets();
+  bool _navigatorSyncScheduled = false;
 
   @override
   void initState() {
@@ -504,6 +724,47 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
     if (widget.isIphoneDuo) {
       _queryBarInsets();
     }
+    if (widget.isRouterRoot) {
+      _scheduleDescendantNavigatorSync();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DuoPageWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isRouterRoot && !oldWidget.isRouterRoot) {
+      _scheduleDescendantNavigatorSync();
+    }
+  }
+
+  void _scheduleDescendantNavigatorSync() {
+    if (_navigatorSyncScheduled) return;
+    _navigatorSyncScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _navigatorSyncScheduled = false;
+      if (!mounted) return;
+      final BuildContext? rootContext = _pageContentKey.currentContext;
+      if (rootContext == null) return;
+      final NavigatorState? navigator = _findDescendantNavigator(rootContext);
+      if (navigator != null) {
+        widget.actionRegistry.updateNavigator(navigator);
+      }
+    });
+  }
+
+  NavigatorState? _findDescendantNavigator(BuildContext root) {
+    NavigatorState? found;
+    void visitor(Element element) {
+      if (found != null) return;
+      if (element is StatefulElement && element.state is NavigatorState) {
+        found = element.state as NavigatorState;
+        return;
+      }
+      element.visitChildren(visitor);
+    }
+
+    (root as Element).visitChildren(visitor);
+    return found;
   }
 
   @override
@@ -518,8 +779,8 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
     try {
       final Map<Object?, Object?>? res =
           await _deviceChannel.invokeMethod<Map<Object?, Object?>>(
-        'getBarLayoutInsets',
-      );
+            'getBarLayoutInsets',
+          );
       if (!mounted || res == null) return;
       final double top = (res['top'] as num?)?.toDouble() ?? 0.0;
       final double bottom = (res['bottom'] as num?)?.toDouble() ?? 16.0;
@@ -560,15 +821,27 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
     return ListenableBuilder(
       listenable: widget.deviceWidthState,
       builder: (context, _) {
+        Widget scopedContent = KeyedSubtree(
+          key: _pageContentKey,
+          child: widget.page,
+        );
+        if (widget.isRouterRoot) {
+          scopedContent = NotificationListener<NavigationNotification>(
+            onNotification: (_) {
+              _scheduleDescendantNavigatorSync();
+              return false;
+            },
+            child: scopedContent,
+          );
+        }
+
         final Widget actionScopedPage = AppActionScope(
           isIphoneDuo: widget.isIphoneDuo,
           registry: widget.actionRegistry,
           bottomNavRegistry: _bottomNavRegistry,
           deviceWidthState: widget.deviceWidthState,
-          child: KeyedSubtree(
-            key: _pageContentKey,
-            child: widget.page,
-          ),
+          useModernMaterial: widget.useModernMaterial,
+          child: scopedContent,
         );
         if (widget.isException) {
           return actionScopedPage;
@@ -578,6 +851,7 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
             actionScopedPage,
             _bottomNavRegistry,
             isLargeScreen: widget.deviceWidthState.state,
+            useModernMaterial: widget.useModernMaterial,
           );
         }
         return _duoToolbarSafeArea(
@@ -612,12 +886,14 @@ Widget _nonDuoLargeScreenNavigationRail(
   Widget child,
   DuoBottomNavRegistry bottomNavRegistry, {
   required bool isLargeScreen,
+  required bool useModernMaterial,
 }) {
   return ListenableBuilder(
     listenable: bottomNavRegistry,
     builder: (context, _) {
-      final DuoBottomNavEntry? activeBottomNav =
-          isLargeScreen ? bottomNavRegistry.activeEntry : null;
+      final DuoBottomNavEntry? activeBottomNav = isLargeScreen
+          ? bottomNavRegistry.activeEntry
+          : null;
       final int safeIndex = activeBottomNav == null
           ? 0
           : activeBottomNav.selectedIndex.clamp(
@@ -627,35 +903,74 @@ Widget _nonDuoLargeScreenNavigationRail(
       return Row(
         children: <Widget>[
           if (activeBottomNav != null) ...<Widget>[
-            NavigationRail(
-              key: _navigationRailKey,
-              selectedIndex: safeIndex,
-              onDestinationSelected: activeBottomNav.onSelected,
-              backgroundColor: activeBottomNav.backgroundColor,
-              labelType: NavigationRailLabelType.all,
-              selectedIconTheme: activeBottomNav.selectedItemColor == null
-                  ? null
-                  : IconThemeData(color: activeBottomNav.selectedItemColor),
-              unselectedIconTheme: activeBottomNav.unselectedItemColor == null
-                  ? null
-                  : IconThemeData(color: activeBottomNav.unselectedItemColor),
-              selectedLabelTextStyle: activeBottomNav.selectedItemColor == null
-                  ? null
-                  : TextStyle(color: activeBottomNav.selectedItemColor),
-              unselectedLabelTextStyle:
-                  activeBottomNav.unselectedItemColor == null
-                      ? null
-                      : TextStyle(color: activeBottomNav.unselectedItemColor),
-              destinations: <NavigationRailDestination>[
-                for (final DuoBottomNavItem item in activeBottomNav.items)
-                  NavigationRailDestination(
-                    icon: item.icon,
-                    selectedIcon: item.selectedIcon,
-                    label: Text(item.label ?? item.tooltip ?? ''),
-                  ),
-              ],
-            ),
-            const VerticalDivider(thickness: 1, width: 1),
+            if (useModernMaterial) ...<Widget>[
+              modern_material.NavigationRail(
+                key: _navigationRailKey,
+                selectedIndex: safeIndex,
+                onDestinationSelected: activeBottomNav.onSelected,
+                backgroundColor: activeBottomNav.backgroundColor,
+                labelType: modern_material.NavigationRailLabelType.all,
+                selectedIconTheme: activeBottomNav.selectedItemColor == null
+                    ? null
+                    : IconThemeData(color: activeBottomNav.selectedItemColor),
+                unselectedIconTheme: activeBottomNav.unselectedItemColor == null
+                    ? null
+                    : IconThemeData(color: activeBottomNav.unselectedItemColor),
+                selectedLabelTextStyle:
+                    activeBottomNav.selectedItemColor == null
+                    ? null
+                    : TextStyle(color: activeBottomNav.selectedItemColor),
+                unselectedLabelTextStyle:
+                    activeBottomNav.unselectedItemColor == null
+                    ? null
+                    : TextStyle(color: activeBottomNav.unselectedItemColor),
+                destinations: <modern_material.NavigationRailDestination>[
+                  for (final DuoBottomNavItem item in activeBottomNav.items)
+                    modern_material.NavigationRailDestination(
+                      icon: item.icon,
+                      selectedIcon: item.selectedIcon,
+                      label: Text(item.label ?? item.tooltip ?? ''),
+                    ),
+                ],
+              ),
+              const modern_material.VerticalDivider(thickness: 1, width: 1),
+            ] else ...<Widget>[
+              // ignore: deprecated_member_use
+              legacy_material.NavigationRail(
+                key: _navigationRailKey,
+                selectedIndex: safeIndex,
+                onDestinationSelected: activeBottomNav.onSelected,
+                backgroundColor: activeBottomNav.backgroundColor,
+                // ignore: deprecated_member_use
+                labelType: legacy_material.NavigationRailLabelType.all,
+                selectedIconTheme: activeBottomNav.selectedItemColor == null
+                    ? null
+                    : IconThemeData(color: activeBottomNav.selectedItemColor),
+                unselectedIconTheme: activeBottomNav.unselectedItemColor == null
+                    ? null
+                    : IconThemeData(color: activeBottomNav.unselectedItemColor),
+                selectedLabelTextStyle:
+                    activeBottomNav.selectedItemColor == null
+                    ? null
+                    : TextStyle(color: activeBottomNav.selectedItemColor),
+                unselectedLabelTextStyle:
+                    activeBottomNav.unselectedItemColor == null
+                    ? null
+                    : TextStyle(color: activeBottomNav.unselectedItemColor),
+                // ignore: deprecated_member_use
+                destinations: <legacy_material.NavigationRailDestination>[
+                  for (final DuoBottomNavItem item in activeBottomNav.items)
+                    // ignore: deprecated_member_use
+                    legacy_material.NavigationRailDestination(
+                      icon: item.icon,
+                      selectedIcon: item.selectedIcon,
+                      label: Text(item.label ?? item.tooltip ?? ''),
+                    ),
+                ],
+              ),
+              // ignore: deprecated_member_use
+              const legacy_material.VerticalDivider(thickness: 1, width: 1),
+            ],
           ],
           Expanded(
             key: _expandedPageChildKey,

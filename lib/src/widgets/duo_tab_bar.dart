@@ -1,8 +1,11 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as legacy_material;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart' as modern_material;
 
 import 'app_action.dart';
 
@@ -47,15 +50,46 @@ class DuoBottomNavEntry {
   final bool showSelectedLabels;
   final bool showUnselectedLabels;
 
-  /// Extracts a [DuoBottomNavEntry] from a [BottomNavigationBar].
+  /// Extracts a [DuoBottomNavEntry] from a BottomNavigationBar.
   static DuoBottomNavEntry? tryFromWidget(
     Widget child, {
     bool useIndependence = false,
   }) {
-    if (child is BottomNavigationBar) {
+    if (child is modern_material.BottomNavigationBar) {
       if (child.items.isEmpty) return null;
       final List<DuoBottomNavItem> items = <DuoBottomNavItem>[
-        for (final BottomNavigationBarItem item in child.items)
+        for (final modern_material.BottomNavigationBarItem item in child.items)
+          DuoBottomNavItem(
+            icon: item.icon,
+            selectedIcon: item.activeIcon,
+            label: item.label,
+            tooltip: item.tooltip ?? item.label,
+          ),
+      ];
+      final int clampedIndex = child.currentIndex.clamp(0, items.length - 1);
+      return DuoBottomNavEntry(
+        items: items,
+        selectedIndex: clampedIndex,
+        onSelected: child.onTap == null
+            ? null
+            : (int index) {
+                child.onTap?.call(index);
+                DuoTabBar.notifyTabSelected(index);
+              },
+        useIndependence: useIndependence,
+        selectedItemColor: child.selectedItemColor ?? child.fixedColor,
+        unselectedItemColor: child.unselectedItemColor,
+        backgroundColor: child.backgroundColor,
+        showSelectedLabels: child.showSelectedLabels ?? true,
+        showUnselectedLabels: child.showUnselectedLabels ?? true,
+      );
+    }
+    // ignore: deprecated_member_use
+    if (child is legacy_material.BottomNavigationBar) {
+      if (child.items.isEmpty) return null;
+      final List<DuoBottomNavItem> items = <DuoBottomNavItem>[
+        // ignore: deprecated_member_use
+        for (final legacy_material.BottomNavigationBarItem item in child.items)
           DuoBottomNavItem(
             icon: item.icon,
             selectedIcon: item.activeIcon,
@@ -189,24 +223,36 @@ class DuoVerticalBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
-    final bool isDark = theme.brightness == Brightness.dark;
+    final bool useModern = isModernMaterialContext(context);
+    final Color primaryColor;
+    final Brightness brightness;
+    if (useModern) {
+      final modern_material.ThemeData theme = modern_material.Theme.of(context);
+      primaryColor = theme.colorScheme.primary;
+      brightness = theme.brightness;
+    } else {
+      // ignore: deprecated_member_use
+      final legacy_material.ThemeData theme = legacy_material.Theme.of(context);
+      primaryColor = theme.colorScheme.primary;
+      brightness = theme.brightness;
+    }
+    final bool isDark = brightness == Brightness.dark;
 
-    final Color selectedColor =
-        entry.selectedItemColor ?? colorScheme.primary;
+    final Color selectedColor = entry.selectedItemColor ?? primaryColor;
     final Color unselectedColor =
         entry.unselectedItemColor ??
-        (isDark ? Colors.white70 : Colors.black87);
+        (isDark
+            ? modern_material.Colors.white70
+            : modern_material.Colors.black87);
     final Color baseSurfaceColor =
         entry.backgroundColor ??
-        (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+        (isDark ? const Color(0xFF2C2C2E) : modern_material.Colors.white);
     final Color surfaceColor = entry.useIndependence
         ? baseSurfaceColor.withValues(alpha: isDark ? 0.78 : 0.88)
         : baseSurfaceColor.withValues(alpha: isDark ? 0.90 : 0.95);
     final Color borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.16)
-        : Colors.black.withValues(alpha: 0.10);
+        ? modern_material.Colors.white.withValues(alpha: 0.16)
+        : modern_material.Colors.black.withValues(alpha: 0.10);
 
     Widget pillContent = Container(
       width: 62,
@@ -217,7 +263,7 @@ class DuoVerticalBottomNav extends StatelessWidget {
         border: Border.all(color: borderColor, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(
+            color: modern_material.Colors.black.withValues(
               alpha: entry.useIndependence ? 0.14 : 0.06,
             ),
             blurRadius: entry.useIndependence ? 16 : 8,
@@ -239,6 +285,7 @@ class DuoVerticalBottomNav extends StatelessWidget {
                 showLabel: i == entry.selectedIndex
                     ? entry.showSelectedLabels
                     : entry.showUnselectedLabels,
+                useModern: useModern,
                 onTap: entry.onSelected == null
                     ? null
                     : () => entry.onSelected!(i),
@@ -259,8 +306,16 @@ class DuoVerticalBottomNav extends StatelessWidget {
       );
     }
 
-    return Material(
-      type: MaterialType.transparency,
+    if (useModern) {
+      return modern_material.Material(
+        type: modern_material.MaterialType.transparency,
+        child: pillContent,
+      );
+    }
+    // ignore: deprecated_member_use
+    return legacy_material.Material(
+      // ignore: deprecated_member_use
+      type: legacy_material.MaterialType.transparency,
       child: pillContent,
     );
   }
@@ -273,6 +328,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
     required this.selectedColor,
     required this.unselectedColor,
     required this.showLabel,
+    required this.useModern,
     required this.onTap,
   });
 
@@ -281,6 +337,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
   final Color selectedColor;
   final Color unselectedColor;
   final bool showLabel;
+  final bool useModern;
   final VoidCallback? onTap;
 
   @override
@@ -292,64 +349,78 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
     final bool hasVisibleLabel =
         showLabel && labelText != null && labelText.isNotEmpty;
 
+    final Widget innerContent = Container(
+      width: 52,
+      padding: EdgeInsets.symmetric(
+        vertical: hasVisibleLabel ? 9 : 11,
+        horizontal: 4,
+      ),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isSelected
+            ? selectedColor.withValues(alpha: 0.16)
+            : modern_material.Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          IconTheme.merge(
+            data: IconThemeData(
+              color: activeColor,
+              size: 24,
+            ),
+            child: iconWidget,
+          ),
+          if (hasVisibleLabel) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              labelText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 9.5,
+                height: 1.15,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: activeColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
     Widget button = Semantics(
       label: tooltipText,
       selected: isSelected,
       button: true,
       enabled: onTap != null,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          width: 52,
-          padding: EdgeInsets.symmetric(
-            vertical: hasVisibleLabel ? 9 : 11,
-            horizontal: 4,
-          ),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? selectedColor.withValues(alpha: 0.16)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              IconTheme.merge(
-                data: IconThemeData(
-                  color: activeColor,
-                  size: 24,
-                ),
-                child: iconWidget,
-              ),
-              if (hasVisibleLabel) ...<Widget>[
-                const SizedBox(height: 4),
-                Text(
-                  labelText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    height: 1.15,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: activeColor,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+      child: useModern
+          ? modern_material.InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(22),
+              child: innerContent,
+            )
+          // ignore: deprecated_member_use
+          : legacy_material.InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(22),
+              child: innerContent,
+            ),
     );
 
     if (tooltipText != null && tooltipText.isNotEmpty) {
-      button = Tooltip(
-        message: tooltipText,
-        child: button,
-      );
+      button = useModern
+          ? modern_material.Tooltip(
+              message: tooltipText,
+              child: button,
+            )
+          // ignore: deprecated_member_use
+          : legacy_material.Tooltip(
+              message: tooltipText,
+              child: button,
+            );
     }
 
     return button;
@@ -358,15 +429,15 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
 
 /// A tab bar / floating action wrapper for iPhone Duo and foldable devices.
 ///
-/// - On iPhone Duo ([isEffectiveDuo] is true, in both folded and unfolded states):
-///   - If [child] is a [BottomNavigationBar], moves the Flutter bottom navigation
+/// - On iPhone Duo (`isEffectiveDuo` is true, in both folded and unfolded states):
+///   - If [child] is a BottomNavigationBar, moves the Flutter bottom navigation
 ///     bar into the vertical bar region at the side of the screen.
-///   - If [child] is a [FloatingActionButton], integrates it into the native iOS
+///   - If [child] is a FloatingActionButton, integrates it into the native iOS
 ///     system bar as a primary/independent action.
 /// - On non-iPhone Duo large screens (e.g. Android foldables and tablets when
 ///   `DeviceWidthState.state` is true):
-///   - If [child] is a [BottomNavigationBar], converts it into a leading
-///     [NavigationRail].
+///   - If [child] is a BottomNavigationBar, converts it into a leading
+///     NavigationRail.
 /// - In all other cases (small screens outside iPhone Duo):
 ///   - Renders [child] directly as a standard Flutter widget.
 class DuoTabBar extends StatefulWidget {
@@ -379,7 +450,7 @@ class DuoTabBar extends StatefulWidget {
   /// Controls whether the controls are presented as an independent floating component.
   final bool useIndependence;
 
-  /// The child navigation widget to host (e.g. [BottomNavigationBar] or [FloatingActionButton]).
+  /// The child navigation widget to host (e.g. BottomNavigationBar or FloatingActionButton).
   final Widget child;
 
   static final List<void Function(int)> _listeners = <void Function(int)>[];
@@ -438,7 +509,10 @@ class _DuoTabBarState extends State<DuoTabBar> {
   void _onTabSelected(int index) {
     if (!mounted) return;
     final Widget child = widget.child;
-    if (child is BottomNavigationBar) {
+    if (child is modern_material.BottomNavigationBar) {
+      child.onTap?.call(index);
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.BottomNavigationBar) {
       child.onTap?.call(index);
     }
   }
@@ -511,14 +585,35 @@ class _DuoTabBarState extends State<DuoTabBar> {
       if (flagsChanged) setState(() {});
       return;
     }
-    if (child is FloatingActionButton) {
+    final ({Widget? childWidget, String? tooltip, VoidCallback? onPressed})?
+    fabData;
+    if (child is modern_material.FloatingActionButton) {
+      fabData = (
+        childWidget: child.child,
+        tooltip: child.tooltip,
+        onPressed: child.onPressed,
+      );
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.FloatingActionButton) {
+      fabData = (
+        childWidget: child.child,
+        tooltip: child.tooltip,
+        onPressed: child.onPressed,
+      );
+    } else {
+      fabData = null;
+    }
+
+    if (fabData != null) {
       final BuildContext currentContext = context;
       Future<Uint8List?> renderIcon(Widget icon) =>
           scope.renderIcon(currentContext, icon);
 
       _buildFabAppAction(
         _sourceId,
-        child,
+        fabData.childWidget,
+        fabData.tooltip,
+        fabData.onPressed,
         widget.useIndependence,
         renderIcon,
       ).then((action) {
@@ -544,23 +639,25 @@ class _DuoTabBarState extends State<DuoTabBar> {
 
   Future<AppAction?> _buildFabAppAction(
     Object sourceId,
-    FloatingActionButton child,
+    Widget? fabChild,
+    String? tooltip,
+    VoidCallback? onPressed,
     bool useIndependence,
     Future<Uint8List?> Function(Widget icon) renderIcon,
   ) async {
-    final Icon? icon = child.child is Icon ? child.child as Icon : null;
+    final Icon? icon = fabChild is Icon ? fabChild : null;
     if (icon == null) return null;
     final Uint8List? iconBytes = await renderIcon(icon);
     if (iconBytes == null) return null;
     return AppAction(
       id: '${identityHashCode(sourceId)}:0',
       role: AppActionRole.primary,
-      label: child.tooltip,
+      label: tooltip,
       iconBytes: iconBytes,
       priority: 80,
-      isEnabled: child.onPressed != null,
+      isEnabled: onPressed != null,
       isIndependent: useIndependence,
-      onPressed: child.onPressed ?? () {},
+      onPressed: onPressed ?? () {},
     );
   }
 
@@ -581,17 +678,38 @@ class _DuoTabBarState extends State<DuoTabBar> {
       if (_isEffectiveDuo) {
         return DuoVerticalBottomNav(entry: bottomNavEntry);
       }
-      return NavigationRail(
-        selectedIndex: bottomNavEntry.selectedIndex.clamp(
-          0,
-          bottomNavEntry.items.length - 1,
-        ),
+      final int safeIndex = bottomNavEntry.selectedIndex.clamp(
+        0,
+        bottomNavEntry.items.length - 1,
+      );
+      if (isModernMaterialContext(context)) {
+        return modern_material.NavigationRail(
+          selectedIndex: safeIndex,
+          onDestinationSelected: bottomNavEntry.onSelected,
+          backgroundColor: bottomNavEntry.backgroundColor,
+          labelType: modern_material.NavigationRailLabelType.all,
+          destinations: <modern_material.NavigationRailDestination>[
+            for (final DuoBottomNavItem item in bottomNavEntry.items)
+              modern_material.NavigationRailDestination(
+                icon: item.icon,
+                selectedIcon: item.selectedIcon,
+                label: Text(item.label ?? item.tooltip ?? ''),
+              ),
+          ],
+        );
+      }
+      // ignore: deprecated_member_use
+      return legacy_material.NavigationRail(
+        selectedIndex: safeIndex,
         onDestinationSelected: bottomNavEntry.onSelected,
         backgroundColor: bottomNavEntry.backgroundColor,
-        labelType: NavigationRailLabelType.all,
-        destinations: <NavigationRailDestination>[
+        // ignore: deprecated_member_use
+        labelType: legacy_material.NavigationRailLabelType.all,
+        // ignore: deprecated_member_use
+        destinations: <legacy_material.NavigationRailDestination>[
           for (final DuoBottomNavItem item in bottomNavEntry.items)
-            NavigationRailDestination(
+            // ignore: deprecated_member_use
+            legacy_material.NavigationRailDestination(
               icon: item.icon,
               selectedIcon: item.selectedIcon,
               label: Text(item.label ?? item.tooltip ?? ''),

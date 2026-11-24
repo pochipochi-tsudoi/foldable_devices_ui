@@ -1,14 +1,35 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as legacy_material;
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart' as modern_material;
 
 import '../state/width_state.dart';
 import 'duo_tab_bar.dart';
 
 /// The inferred role of a control in the iPhone Duo toolbar.
 enum AppActionRole { back, primary, action, destination }
+
+/// Returns whether [context] is hosted inside a `material_ui` widget tree.
+bool isModernMaterialContext(BuildContext context) {
+  final AppActionScope? scope = AppActionScope.maybeOf(context);
+  if (scope != null) {
+    return scope.useModernMaterial;
+  }
+  return context.findAncestorWidgetOfExactType<modern_material.Theme>() != null;
+}
+
+Color _resolveOnSurfaceColor(BuildContext context, {bool? useModern}) {
+  final bool modern = useModern ?? isModernMaterialContext(context);
+  if (modern) {
+    return modern_material.Theme.of(context).colorScheme.onSurface;
+  }
+  // ignore: deprecated_member_use
+  return legacy_material.Theme.of(context).colorScheme.onSurface;
+}
 
 /// A serializable action presented in the native iPhone Duo toolbar.
 @immutable
@@ -70,6 +91,8 @@ class AppActionRegistry extends ChangeNotifier {
   NavigatorState? _rootNavigator;
   bool _notificationScheduled = false;
   bool _disposed = false;
+
+  NavigatorState? get rootNavigator => _rootNavigator;
 
   @visibleForTesting
   int get registeredSourceCount => _sources.length;
@@ -174,6 +197,7 @@ class AppActionScope extends InheritedWidget {
     required this.registry,
     this.bottomNavRegistry,
     this.deviceWidthState,
+    this.useModernMaterial = false,
     @visibleForTesting this.iconRasterizer,
     required super.child,
   });
@@ -182,6 +206,7 @@ class AppActionScope extends InheritedWidget {
   final AppActionRegistry registry;
   final DuoBottomNavRegistry? bottomNavRegistry;
   final DeviceWidthState? deviceWidthState;
+  final bool useModernMaterial;
 
   /// Returns true when running on an iPhone Duo device (in both folded/closed
   /// outer display and unfolded/open inner display states).
@@ -192,7 +217,7 @@ class AppActionScope extends InheritedWidget {
   bool get isLargeScreen => deviceWidthState?.state ?? false;
 
   /// Returns true when bottom navigation should be relocated (to the vertical bar
-  /// on iPhone Duo, or to a [NavigationRail] on non-Duo large screens).
+  /// on iPhone Duo, or to a NavigationRail on non-Duo large screens).
   bool get shouldRelocateBottomNav => isIphoneDuo || isLargeScreen;
 
   @visibleForTesting
@@ -208,7 +233,10 @@ class AppActionScope extends InheritedWidget {
     }
     final environment = _IconRenderEnvironment(
       iconTheme: IconTheme.of(context),
-      fallbackColor: Theme.of(context).colorScheme.onSurface,
+      fallbackColor: _resolveOnSurfaceColor(
+        context,
+        useModern: useModernMaterial,
+      ),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
@@ -225,6 +253,7 @@ class AppActionScope extends InheritedWidget {
       registry != oldWidget.registry ||
       bottomNavRegistry != oldWidget.bottomNavRegistry ||
       deviceWidthState != oldWidget.deviceWidthState ||
+      useModernMaterial != oldWidget.useModernMaterial ||
       iconRasterizer != oldWidget.iconRasterizer;
 }
 
@@ -270,8 +299,8 @@ class AppActionNavigatorObserver extends NavigatorObserver {
 /// Moves supported controls into the iPhone Duo toolbar.
 ///
 /// On other platforms, the original widgets remain at this location. Supported
-/// children are [IconButton], [BackButton], [FloatingActionButton],
-/// [BottomNavigationBar], and [NavigationBar].
+/// children are IconButton, BackButton, FloatingActionButton,
+/// BottomNavigationBar, and NavigationBar.
 class ToolBar extends StatefulWidget {
   const ToolBar({super.key, required this.child});
 
@@ -331,6 +360,7 @@ class _ToolBarState extends State<ToolBar> {
       widget.child,
       _sourceId,
       iconRasterizer: scope.iconRasterizer,
+      useModernMaterial: scope.useModernMaterial,
     ).then((result) {
       if (!mounted || generation != _generation) return;
       _unsupported = result.unsupported;
@@ -401,10 +431,11 @@ Future<_ActionBuildResult> _buildActions(
   Object sourceId, {
   Future<Uint8List?> Function(BuildContext context, Widget icon)?
   iconRasterizer,
+  bool? useModernMaterial,
 }) async {
   final _IconRenderEnvironment environment = _IconRenderEnvironment(
     iconTheme: IconTheme.of(context),
-    fallbackColor: Theme.of(context).colorScheme.onSurface,
+    fallbackColor: _resolveOnSurfaceColor(context, useModern: useModernMaterial),
     textDirection: Directionality.of(context),
     textScaler: MediaQuery.textScalerOf(context),
     pixelRatio: MediaQuery.devicePixelRatioOf(context),
@@ -464,16 +495,26 @@ Future<_ActionBuildResult> _buildActions(
         onPressed: child.onPressed ?? () => navigator?.maybePop(),
         priority: 100,
       );
-    } else if (child is BackButton) {
+    } else if (child is modern_material.BackButton) {
+      if (child.onPressed == null && !canPop) continue;
+      await addAction(
+        role: AppActionRole.back,
+        label: 'Back',
+        icon: const Icon(modern_material.Icons.arrow_back_ios_new),
+        onPressed: child.onPressed ?? () => navigator?.maybePop(),
+        priority: 100,
+      );
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.BackButton) {
       if (child.onPressed == null && !canPop) continue;
       await addAction(
         role: AppActionRole.back,
         label: child.tooltip ?? 'Back',
-        icon: const Icon(Icons.arrow_back_ios_new),
+        icon: const Icon(modern_material.Icons.arrow_back_ios_new),
         onPressed: child.onPressed ?? () => navigator?.maybePop(),
         priority: 100,
       );
-    } else if (child is IconButton) {
+    } else if (child is modern_material.IconButton) {
       final Icon? icon = child.icon is Icon ? child.icon as Icon : null;
       if (icon == null) {
         unsupported.add(child);
@@ -486,7 +527,21 @@ Future<_ActionBuildResult> _buildActions(
         onPressed: child.onPressed,
         priority: 50,
       );
-    } else if (child is FloatingActionButton) {
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.IconButton) {
+      final Icon? icon = child.icon is Icon ? child.icon as Icon : null;
+      if (icon == null) {
+        unsupported.add(child);
+        continue;
+      }
+      await addAction(
+        role: AppActionRole.action,
+        label: child.tooltip,
+        icon: icon,
+        onPressed: child.onPressed,
+        priority: 50,
+      );
+    } else if (child is modern_material.FloatingActionButton) {
       final Icon? icon = child.child is Icon ? child.child as Icon : null;
       if (icon == null) {
         unsupported.add(child);
@@ -499,7 +554,21 @@ Future<_ActionBuildResult> _buildActions(
         onPressed: child.onPressed,
         priority: 80,
       );
-    } else if (child is BottomNavigationBar) {
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.FloatingActionButton) {
+      final Icon? icon = child.child is Icon ? child.child as Icon : null;
+      if (icon == null) {
+        unsupported.add(child);
+        continue;
+      }
+      await addAction(
+        role: AppActionRole.primary,
+        label: child.tooltip,
+        icon: icon,
+        onPressed: child.onPressed,
+        priority: 80,
+      );
+    } else if (child is modern_material.BottomNavigationBar) {
       final bool iconsSupported = child.items.every(
         (item) => item.icon is Icon && item.activeIcon is Icon,
       );
@@ -508,7 +577,8 @@ Future<_ActionBuildResult> _buildActions(
         continue;
       }
       for (var itemIndex = 0; itemIndex < child.items.length; itemIndex++) {
-        final BottomNavigationBarItem item = child.items[itemIndex];
+        final modern_material.BottomNavigationBarItem item =
+            child.items[itemIndex];
         final bool selected = itemIndex == child.currentIndex;
         await addAction(
           role: AppActionRole.destination,
@@ -521,9 +591,35 @@ Future<_ActionBuildResult> _buildActions(
           enabled: child.onTap != null,
         );
       }
-    } else if (child is NavigationBar) {
-      final List<NavigationDestination> destinations = child.destinations
-          .whereType<NavigationDestination>()
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.BottomNavigationBar) {
+      final bool iconsSupported = child.items.every(
+        (item) => item.icon is Icon && item.activeIcon is Icon,
+      );
+      if (!iconsSupported) {
+        unsupported.add(child);
+        continue;
+      }
+      for (var itemIndex = 0; itemIndex < child.items.length; itemIndex++) {
+        // ignore: deprecated_member_use
+        final legacy_material.BottomNavigationBarItem item =
+            child.items[itemIndex];
+        final bool selected = itemIndex == child.currentIndex;
+        await addAction(
+          role: AppActionRole.destination,
+          label: item.tooltip ?? item.label,
+          icon: (selected ? item.activeIcon : item.icon) as Icon,
+          selectedIcon: item.activeIcon as Icon,
+          onPressed: child.onTap == null ? null : () => child.onTap!(itemIndex),
+          priority: 70,
+          selected: selected,
+          enabled: child.onTap != null,
+        );
+      }
+    } else if (child is modern_material.NavigationBar) {
+      final List<modern_material.NavigationDestination> destinations = child
+          .destinations
+          .whereType<modern_material.NavigationDestination>()
           .toList(growable: false);
       if (destinations.length != child.destinations.length ||
           destinations.any(
@@ -534,7 +630,42 @@ Future<_ActionBuildResult> _buildActions(
         continue;
       }
       for (var itemIndex = 0; itemIndex < destinations.length; itemIndex++) {
-        final NavigationDestination destination = destinations[itemIndex];
+        final modern_material.NavigationDestination destination =
+            destinations[itemIndex];
+        final bool selected = itemIndex == child.selectedIndex;
+        await addAction(
+          role: AppActionRole.destination,
+          label: destination.tooltip ?? destination.label,
+          icon:
+              (selected ? destination.selectedIcon : destination.icon) as Icon,
+          selectedIcon: destination.selectedIcon as Icon,
+          onPressed: child.onDestinationSelected == null
+              ? null
+              : () => child.onDestinationSelected!(itemIndex),
+          priority: 70,
+          selected: selected,
+        );
+      }
+      // ignore: deprecated_member_use
+    } else if (child is legacy_material.NavigationBar) {
+      // ignore: deprecated_member_use
+      final List<legacy_material.NavigationDestination> destinations = child
+          .destinations
+          // ignore: deprecated_member_use
+          .whereType<legacy_material.NavigationDestination>()
+          .toList(growable: false);
+      if (destinations.length != child.destinations.length ||
+          destinations.any(
+            (destination) =>
+                destination.icon is! Icon || destination.selectedIcon is! Icon,
+          )) {
+        unsupported.add(child);
+        continue;
+      }
+      for (var itemIndex = 0; itemIndex < destinations.length; itemIndex++) {
+        // ignore: deprecated_member_use
+        final legacy_material.NavigationDestination destination =
+            destinations[itemIndex];
         final bool selected = itemIndex == child.selectedIndex;
         await addAction(
           role: AppActionRole.destination,
@@ -657,12 +788,12 @@ Future<Uint8List?> rasterizeDefaultToolbarIcon(
 }
 
 /// A back button that moves into the iPhone Duo toolbar when hosted by
-/// [DuoSafeArea]. Set the containing [AppBar.automaticallyImplyLeading] to
+/// DuoSafeArea. Set the containing AppBar.automaticallyImplyLeading to
 /// false to avoid also displaying Flutter's implicit back button.
 class AppBarBackButtonWidget extends StatelessWidget {
   const AppBarBackButtonWidget({
     super.key,
-    this.icon = Icons.arrow_back_ios_new,
+    this.icon = modern_material.Icons.arrow_back_ios_new,
     this.color,
     this.tooltip = 'Back',
     this.onPressed,
@@ -702,10 +833,23 @@ class _AppBarBackAction extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    color: color,
-    onPressed: onPressed ?? () => Navigator.maybePop(context),
-    icon: Icon(icon, color: color),
-  );
+  Widget build(BuildContext context) {
+    final VoidCallback effectiveOnPressed =
+        onPressed ?? () => Navigator.maybePop(context);
+    if (isModernMaterialContext(context)) {
+      return modern_material.IconButton(
+        tooltip: tooltip,
+        color: color,
+        onPressed: effectiveOnPressed,
+        icon: Icon(icon, color: color),
+      );
+    }
+    // ignore: deprecated_member_use
+    return legacy_material.IconButton(
+      tooltip: tooltip,
+      color: color,
+      onPressed: effectiveOnPressed,
+      icon: Icon(icon, color: color),
+    );
+  }
 }
