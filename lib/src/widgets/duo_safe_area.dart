@@ -678,11 +678,13 @@ class _DuoBarLayoutInsets {
     this.top = 0.0,
     this.bottom = 16.0,
     this.hasPunchHoleAtBottom = false,
+    this.isOuterDisplay,
   });
 
   final double top;
   final double bottom;
   final bool hasPunchHoleAtBottom;
+  final bool? isOuterDisplay;
 }
 
 class _DuoPageWrapper extends StatefulWidget {
@@ -732,6 +734,9 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
   @override
   void didUpdateWidget(covariant _DuoPageWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.isIphoneDuo && !oldWidget.isIphoneDuo) {
+      _queryBarInsets();
+    }
     if (widget.isRouterRoot && !oldWidget.isRouterRoot) {
       _scheduleDescendantNavigatorSync();
     }
@@ -784,16 +789,19 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
       if (!mounted || res == null) return;
       final double top = (res['top'] as num?)?.toDouble() ?? 0.0;
       final double bottom = (res['bottom'] as num?)?.toDouble() ?? 16.0;
+      final bool? isOuterDisplay = res['isOuterDisplay'] as bool?;
       final bool hasHoleAtBottom =
           (res['hasPunchHoleAtBottom'] as bool?) ?? (bottom >= 80.0);
       final _DuoBarLayoutInsets newInsets = _DuoBarLayoutInsets(
         top: top,
         bottom: bottom,
         hasPunchHoleAtBottom: hasHoleAtBottom,
+        isOuterDisplay: isOuterDisplay,
       );
       if (_barInsets.top != newInsets.top ||
           _barInsets.bottom != newInsets.bottom ||
-          _barInsets.hasPunchHoleAtBottom != newInsets.hasPunchHoleAtBottom) {
+          _barInsets.hasPunchHoleAtBottom != newInsets.hasPunchHoleAtBottom ||
+          _barInsets.isOuterDisplay != newInsets.isOuterDisplay) {
         setState(() {
           _barInsets = newInsets;
         });
@@ -854,11 +862,14 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
             useModernMaterial: widget.useModernMaterial,
           );
         }
+        final bool isSubDisplay =
+            width < 890 &&
+            (_barInsets.isOuterDisplay ?? !widget.deviceWidthState.state);
         return _duoToolbarSafeArea(
           actionScopedPage,
           widget.backgroundColor,
           _bottomNavRegistry,
-          isSubDisplay: !widget.deviceWidthState.state,
+          isSubDisplay: isSubDisplay,
           barInsets: _barInsets,
         );
       },

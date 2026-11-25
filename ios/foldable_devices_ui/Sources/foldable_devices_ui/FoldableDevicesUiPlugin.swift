@@ -65,29 +65,49 @@ public class FoldableDevicesUiPlugin: NSObject, FlutterPlugin {
           "top": 0.0,
           "bottom": 16.0,
           "hasPunchHoleAtBottom": false,
+          "isOuterDisplay": false,
         ])
         return
       }
 
       let orientation: UIInterfaceOrientation
+      let screen: UIScreen
       if #available(iOS 13.0, *), let scene = window.windowScene {
         orientation = scene.interfaceOrientation
+        screen = scene.screen
       } else {
         orientation = UIApplication.shared.statusBarOrientation
+        screen = window.screen
+      }
+
+      // Distinguish the physical Outer Display (1398x2034 px / 466x678 pt) from
+      // the unfolded Inner Display (2007x2853 px / 669x951 pt).
+      // Checking physical screen dimensions instead of app window width ensures
+      // that half-screen (left-only / right-only) windows on the Inner Display
+      // are not misclassified as the folded Outer Display.
+      let maxNativeDimension = max(screen.nativeBounds.width, screen.nativeBounds.height)
+      let isOuterDisplay: Bool
+      if maxNativeDimension > 0 {
+        isOuterDisplay = maxNativeDimension < 2400.0
+      } else {
+        isOuterDisplay = max(screen.bounds.width, screen.bounds.height) < 800.0
       }
 
       // On iPhone Duo Outer Display in landscape orientation:
       // - landscapeRight: Dynamic Island is at the top-left, so bottom has NO punch-hole (bottom: 16.0)
       // - landscapeLeft: Dynamic Island is rotated 180° to the bottom, so bottom HAS punch-hole (bottom: 112.0)
       // - portrait / portraitUpsideDown: Dynamic Island does not collide with bottom bar (bottom: 16.0)
-      let hasPunchHoleAtBottom = (orientation == .landscapeLeft)
+      // On the Inner Display (full-screen, left-only, or right-only):
+      // - TabBar stays at a fixed bottom position (bottom: 16.0) per HIG.
+      let hasPunchHoleAtBottom = isOuterDisplay && (orientation == .landscapeLeft)
       let bottomInset: Double = hasPunchHoleAtBottom ? 112.0 : 16.0
-      let topInset: Double = (orientation == .landscapeRight) ? 82.0 : 0.0
+      let topInset: Double = (isOuterDisplay && orientation == .landscapeRight) ? 82.0 : 0.0
 
       result([
         "top": topInset,
         "bottom": bottomInset,
         "hasPunchHoleAtBottom": hasPunchHoleAtBottom,
+        "isOuterDisplay": isOuterDisplay,
       ])
     default:
       result(FlutterMethodNotImplemented)

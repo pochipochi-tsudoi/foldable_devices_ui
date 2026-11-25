@@ -216,6 +216,106 @@ void main() {
     expect(safeArea.top, isFalse);
     expect(safeArea.bottom, isFalse);
   });
+
+  testWidgets(
+    'keeps DuoVerticalBottomNav fixed at bottom on Inner Display half-screen (left/right only)',
+    (tester) async {
+      tester.view.physicalSize = const Size(475, 669);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(deviceChannel, (call) async {
+            if (call.method == 'isIphoneDuo') return true;
+            if (call.method == 'getBarLayoutInsets') {
+              return <String, Object?>{
+                'top': 0.0,
+                'bottom': 112.0,
+                'hasPunchHoleAtBottom': true,
+                'isOuterDisplay': false,
+              };
+            }
+            return null;
+          });
+
+      await tester.pumpWidget(
+        const DuoSafeArea(child: MaterialApp(home: _TabPage())),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder verticalNav = find.byKey(
+        const ValueKey<String>('duoSafeArea.verticalBottomNav'),
+      );
+      expect(verticalNav, findsOneWidget);
+      final Positioned positioned = tester.widget<Positioned>(verticalNav);
+      expect(positioned.bottom, 16.0);
+    },
+  );
+
+  testWidgets(
+    'shifts DuoVerticalBottomNav vertically on Outer Display rotation',
+    (tester) async {
+      tester.view.physicalSize = const Size(678, 466);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      bool punchHoleAtBottom = true;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(deviceChannel, (call) async {
+            if (call.method == 'isIphoneDuo') return true;
+            if (call.method == 'getBarLayoutInsets') {
+              return <String, Object?>{
+                'top': punchHoleAtBottom ? 0.0 : 82.0,
+                'bottom': punchHoleAtBottom ? 112.0 : 16.0,
+                'hasPunchHoleAtBottom': punchHoleAtBottom,
+                'isOuterDisplay': true,
+              };
+            }
+            return null;
+          });
+
+      await tester.pumpWidget(
+        const DuoSafeArea(child: MaterialApp(home: _TabPage())),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder verticalNav = find.byKey(
+        const ValueKey<String>('duoSafeArea.verticalBottomNav'),
+      );
+      expect(verticalNav, findsOneWidget);
+      expect(tester.widget<Positioned>(verticalNav).bottom, 112.0);
+
+      // Rotate outer display so Dynamic Island moves away from bottom.
+      punchHoleAtBottom = false;
+      tester.binding.handleMetricsChanged();
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<Positioned>(verticalNav).bottom, 16.0);
+    },
+  );
+}
+
+class _TabPage extends StatelessWidget {
+  const _TabPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: const SizedBox.expand(),
+      bottomNavigationBar: DuoTabBar(
+        child: BottomNavigationBar(
+          currentIndex: 0,
+          onTap: (_) {},
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _RegularPage extends StatelessWidget {
