@@ -214,10 +214,7 @@ class DuoBottomNavRegistry extends ChangeNotifier {
 /// Renders the relocated Flutter bottom navigation bar vertically inside the
 /// iPhone Duo side safe-area strip.
 class DuoVerticalBottomNav extends StatelessWidget {
-  const DuoVerticalBottomNav({
-    super.key,
-    required this.entry,
-  });
+  const DuoVerticalBottomNav({super.key, required this.entry});
 
   final DuoBottomNavEntry entry;
 
@@ -366,10 +363,7 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           IconTheme.merge(
-            data: IconThemeData(
-              color: activeColor,
-              size: 24,
-            ),
+            data: IconThemeData(color: activeColor, size: 24),
             child: iconWidget,
           ),
           if (hasVisibleLabel) ...<Widget>[
@@ -412,15 +406,9 @@ class _DuoVerticalBottomNavItemButton extends StatelessWidget {
 
     if (tooltipText != null && tooltipText.isNotEmpty) {
       button = useModern
-          ? modern_material.Tooltip(
-              message: tooltipText,
-              child: button,
-            )
+          ? modern_material.Tooltip(message: tooltipText, child: button)
           // ignore: deprecated_member_use
-          : legacy_material.Tooltip(
-              message: tooltipText,
-              child: button,
-            );
+          : legacy_material.Tooltip(message: tooltipText, child: button);
     }
 
     return button;

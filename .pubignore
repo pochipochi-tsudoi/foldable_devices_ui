@@ -1,0 +1,38 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+*.docs/report
+*AGENTS.md
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub related
+/pubspec.lock
+**/doc/api/
+.dart_tool/
+.flutter-plugins-dependencies
+/build/
+/coverage/
+
+# Native build caches
+android/.gradle/
+android/build/
+ios/foldable_devices_ui/.build/
+
+# Internal docs, agent configs, and repo-only assets
+.agent/
+.github/
+docs/
+screenshot.png

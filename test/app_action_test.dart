@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foldable_devices_ui/src/widgets/app_action.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('moves FAB and icon actions into the Duo registry', (
@@ -17,6 +17,7 @@ void main() {
         home: AppActionScope(
           isIphoneDuo: true,
           registry: registry,
+          useModernMaterial: true,
           iconRasterizer: _rasterizeForTest,
           child: Scaffold(
             body: ToolBar(
@@ -76,6 +77,7 @@ void main() {
         home: AppActionScope(
           isIphoneDuo: true,
           registry: registry,
+          useModernMaterial: true,
           iconRasterizer: _rasterizeForTest,
           child: Scaffold(
             body: ToolBar(
@@ -115,6 +117,56 @@ void main() {
     registry.dispose();
   });
 
+  testWidgets('moves NavigationBar destinations with selected state', (
+    tester,
+  ) async {
+    final AppActionRegistry registry = AppActionRegistry();
+    int? selectedIndex;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppActionScope(
+          isIphoneDuo: true,
+          registry: registry,
+          useModernMaterial: true,
+          iconRasterizer: _rasterizeForTest,
+          child: Scaffold(
+            body: ToolBar(
+              child: <Widget>[
+                NavigationBar(
+                  selectedIndex: 0,
+                  onDestinationSelected: (index) => selectedIndex = index,
+                  destinations: const <NavigationDestination>[
+                    NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home),
+                      label: 'Home',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings),
+                      label: 'Settings',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(registry.activeActions, hasLength(2));
+    expect(registry.activeActions[0].role, AppActionRole.destination);
+    expect(registry.activeActions[0].isSelected, isTrue);
+    expect(registry.activeActions[1].isSelected, isFalse);
+    registry.activeActions[1].onPressed();
+    expect(selectedIndex, 1);
+
+    registry.dispose();
+  });
+
   testWidgets('AppBarBackButtonWidget registers a native back action', (
     tester,
   ) async {
@@ -125,6 +177,7 @@ void main() {
         builder: (context, child) => AppActionScope(
           isIphoneDuo: true,
           registry: registry,
+          useModernMaterial: true,
           iconRasterizer: _rasterizeForTest,
           child: child!,
         ),
@@ -133,6 +186,7 @@ void main() {
           '/detail': (_) => AppActionScope(
             isIphoneDuo: true,
             registry: registry,
+            useModernMaterial: true,
             iconRasterizer: _rasterizeForTest,
             child: Scaffold(
               appBar: AppBar(
@@ -163,12 +217,16 @@ void main() {
         builder: (context, child) => AppActionScope(
           isIphoneDuo: false,
           registry: registry,
+          useModernMaterial: true,
           child: child!,
         ),
         home: Scaffold(
           body: ToolBar(
             child: <Widget>[
-              FloatingActionButton(onPressed: null, child: Icon(Icons.add)),
+              FloatingActionButton(
+                onPressed: null,
+                child: const Icon(Icons.add),
+              ),
             ],
           ),
         ),

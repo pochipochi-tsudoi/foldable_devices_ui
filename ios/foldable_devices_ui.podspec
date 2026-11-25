@@ -1,13 +1,13 @@
 Pod::Spec.new do |s|
   s.name             = 'foldable_devices_ui'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter package project.'
+  s.version          = '0.1.0'
+  s.summary          = 'Adaptive Flutter UI widgets and controllers for foldable devices.'
   s.description      = <<-DESC
-A new Flutter package project.
+Adaptive Flutter UI widgets and controllers for foldable devices, including iPhone Duo SafeArea, native toolbar actions, vertical navigation, and hinge-angle split layouts.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/pochipochi-tsudoi/foldable_devices_ui'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'pochipochi-tsudoi' => 'https://github.com/pochipochi-tsudoi' }
   s.source           = { :path => '.' }
   s.source_files = 'foldable_devices_ui/Sources/foldable_devices_ui/**/*'
   s.dependency 'Flutter'

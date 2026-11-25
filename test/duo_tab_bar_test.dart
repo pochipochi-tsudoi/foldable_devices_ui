@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foldable_devices_ui/foldable_devices_ui.dart';
 import 'package:foldable_devices_ui/src/state/width_state.dart';
 import 'package:foldable_devices_ui/src/widgets/app_action.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,94 +34,61 @@ void main() {
     return Uint8List.fromList(<int>[1, 2, 3]);
   }
 
-  group('DuoTabBar Native Bridge', () {
-    testWidgets('renders child directly when not on iPhone Duo', (
-      tester,
-    ) async {
-      final AppActionRegistry registry = AppActionRegistry();
+  group('DuoTabBar', () {
+    testWidgets(
+      'renders BottomNavigationBar directly on small non-Duo screens',
+      (tester) async {
+        final DeviceWidthState widthState = DeviceWidthState(false);
+        final AppActionRegistry registry = AppActionRegistry();
+        final DuoBottomNavRegistry bottomNavRegistry = DuoBottomNavRegistry();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppActionScope(
-            isIphoneDuo: false,
-            registry: registry,
-            iconRasterizer: mockRasterizer,
-            child: Scaffold(
-              bottomNavigationBar: DuoTabBar(
-                useIndependence: false,
-                child: BottomNavigationBar(
-                  items: const <BottomNavigationBarItem>[
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.search),
-                      label: 'Search',
-                    ),
-                  ],
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: false,
+              registry: registry,
+              bottomNavRegistry: bottomNavRegistry,
+              deviceWidthState: widthState,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                bottomNavigationBar: DuoTabBar(
+                  useIndependence: false,
+                  child: BottomNavigationBar(
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.search),
+                        label: 'Search',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Child is rendered directly in Flutter tree
-      expect(find.byType(BottomNavigationBar), findsOneWidget);
-      expect(registry.registeredSourceCount, 0);
+        expect(find.byType(BottomNavigationBar), findsOneWidget);
+        expect(registry.registeredSourceCount, 0);
+        expect(bottomNavRegistry.registeredSourceCount, 0);
 
-      registry.dispose();
-    });
-
-    testWidgets('renders child directly when DeviceWidthState is false (folded screen)', (
-      tester,
-    ) async {
-      final DeviceWidthState widthState = DeviceWidthState(false);
-      final AppActionRegistry registry = AppActionRegistry();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppActionScope(
-            isIphoneDuo: true,
-            registry: registry,
-            deviceWidthState: widthState,
-            iconRasterizer: mockRasterizer,
-            child: Scaffold(
-              bottomNavigationBar: DuoTabBar(
-                useIndependence: false,
-                child: BottomNavigationBar(
-                  items: const <BottomNavigationBarItem>[
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.search),
-                      label: 'Search',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Child is rendered directly because screen is folded/narrow
-      expect(find.byType(BottomNavigationBar), findsOneWidget);
-      expect(registry.registeredSourceCount, 0);
-
-      registry.dispose();
-    });
+        widthState.dispose();
+        bottomNavRegistry.dispose();
+        registry.dispose();
+      },
+    );
 
     testWidgets(
-      'registers destination actions into AppActionRegistry on unfolded iPhone Duo (useIndependence: false)',
+      'relocates BottomNavigationBar into DuoBottomNavRegistry on folded iPhone Duo',
       (tester) async {
-        final DeviceWidthState widthState = DeviceWidthState(true);
+        final DeviceWidthState widthState = DeviceWidthState(false);
         final AppActionRegistry registry = AppActionRegistry();
+        final DuoBottomNavRegistry bottomNavRegistry = DuoBottomNavRegistry();
         int? tappedIndex;
 
         await tester.pumpWidget(
@@ -129,7 +96,9 @@ void main() {
             home: AppActionScope(
               isIphoneDuo: true,
               registry: registry,
+              bottomNavRegistry: bottomNavRegistry,
               deviceWidthState: widthState,
+              useModernMaterial: true,
               iconRasterizer: mockRasterizer,
               child: Scaffold(
                 bottomNavigationBar: DuoTabBar(
@@ -155,187 +124,284 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Child is replaced by native placeholder; Flutter BottomNavigationBar is not rendered
+        // BottomNavigationBar is hidden in the Scaffold slot and hosted via DuoBottomNavRegistry.
         expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(registry.registeredSourceCount, 0);
+        expect(bottomNavRegistry.registeredSourceCount, 1);
 
-        // Registered in registry as destination actions
-        expect(registry.registeredSourceCount, 1);
-        expect(registry.activeActions, hasLength(2));
-        expect(registry.activeActions[0].role, AppActionRole.destination);
-        expect(registry.activeActions[0].isIndependent, false);
-        expect(registry.activeActions[0].isSelected, true);
-        expect(registry.activeActions[1].isSelected, false);
+        final DuoBottomNavEntry? entry = bottomNavRegistry.activeEntry;
+        expect(entry, isNotNull);
+        expect(entry!.items, hasLength(2));
+        expect(entry.selectedIndex, 0);
+        expect(entry.useIndependence, isFalse);
 
-        // Tap triggers callback
-        registry.activeActions[1].onPressed();
+        entry.onSelected?.call(1);
         expect(tappedIndex, 1);
+
+        widthState.dispose();
+        bottomNavRegistry.dispose();
+        registry.dispose();
+      },
+    );
+
+    testWidgets(
+      'relocates BottomNavigationBar with useIndependence: true on unfolded iPhone Duo',
+      (tester) async {
+        final DeviceWidthState widthState = DeviceWidthState(true);
+        final AppActionRegistry registry = AppActionRegistry();
+        final DuoBottomNavRegistry bottomNavRegistry = DuoBottomNavRegistry();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: true,
+              registry: registry,
+              bottomNavRegistry: bottomNavRegistry,
+              deviceWidthState: widthState,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                bottomNavigationBar: DuoTabBar(
+                  useIndependence: true,
+                  child: BottomNavigationBar(
+                    currentIndex: 1,
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.search),
+                        label: 'Search',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(registry.registeredSourceCount, 0);
+        expect(bottomNavRegistry.registeredSourceCount, 1);
+        expect(bottomNavRegistry.activeEntry?.selectedIndex, 1);
+        expect(bottomNavRegistry.activeEntry?.useIndependence, isTrue);
+
+        widthState.dispose();
+        bottomNavRegistry.dispose();
+        registry.dispose();
+      },
+    );
+
+    testWidgets(
+      'renders DuoVerticalBottomNav directly on iPhone Duo without DuoBottomNavRegistry',
+      (tester) async {
+        final AppActionRegistry registry = AppActionRegistry();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: true,
+              registry: registry,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                bottomNavigationBar: DuoTabBar(
+                  child: BottomNavigationBar(
+                    currentIndex: 0,
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.search),
+                        label: 'Search',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(find.byType(DuoVerticalBottomNav), findsOneWidget);
 
         registry.dispose();
       },
     );
 
-    testWidgets('registers independent actions with useIndependence: true', (
-      tester,
-    ) async {
-      final DeviceWidthState widthState = DeviceWidthState(true);
-      final AppActionRegistry registry = AppActionRegistry();
+    testWidgets(
+      'converts BottomNavigationBar to NavigationRail on non-Duo large screens',
+      (tester) async {
+        final DeviceWidthState widthState = DeviceWidthState(true);
+        final AppActionRegistry registry = AppActionRegistry();
+        int? selectedIndex;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppActionScope(
-            isIphoneDuo: true,
-            registry: registry,
-            deviceWidthState: widthState,
-            iconRasterizer: mockRasterizer,
-            child: Scaffold(
-              bottomNavigationBar: DuoTabBar(
-                useIndependence: true,
-                child: BottomNavigationBar(
-                  currentIndex: 1,
-                  items: const <BottomNavigationBarItem>[
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.search),
-                      label: 'Search',
-                    ),
-                  ],
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: false,
+              registry: registry,
+              deviceWidthState: widthState,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                body: DuoTabBar(
+                  child: BottomNavigationBar(
+                    currentIndex: 0,
+                    onTap: (index) => selectedIndex = index,
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.settings),
+                        label: 'Settings',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(registry.registeredSourceCount, 1);
-      expect(registry.activeActions, hasLength(2));
-      expect(registry.activeActions[0].isIndependent, true);
-      expect(registry.activeActions[1].isIndependent, true);
+        expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(find.byType(NavigationRail), findsOneWidget);
 
-      registry.dispose();
-    });
+        final NavigationRail rail = tester.widget<NavigationRail>(
+          find.byType(NavigationRail),
+        );
+        expect(rail.selectedIndex, 0);
+        rail.onDestinationSelected?.call(1);
+        expect(selectedIndex, 1);
 
-    testWidgets('supports FloatingActionButton and coexists with BottomNavigationBar', (
-      tester,
-    ) async {
-      final DeviceWidthState widthState = DeviceWidthState(true);
-      final AppActionRegistry registry = AppActionRegistry();
-      int fabClickCount = 0;
-      int tabIndex = 0;
+        widthState.dispose();
+        registry.dispose();
+      },
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppActionScope(
-            isIphoneDuo: true,
-            registry: registry,
-            deviceWidthState: widthState,
-            iconRasterizer: mockRasterizer,
-            child: Scaffold(
-              floatingActionButton: DuoTabBar(
-                useIndependence: true,
-                child: FloatingActionButton(
-                  onPressed: () => fabClickCount++,
-                  tooltip: 'Increment',
-                  child: const Icon(Icons.add),
+    testWidgets(
+      'supports FloatingActionButton in AppActionRegistry and coexists with BottomNavigationBar',
+      (tester) async {
+        final DeviceWidthState widthState = DeviceWidthState(true);
+        final AppActionRegistry registry = AppActionRegistry();
+        final DuoBottomNavRegistry bottomNavRegistry = DuoBottomNavRegistry();
+        int fabClickCount = 0;
+        int tabIndex = 0;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: true,
+              registry: registry,
+              bottomNavRegistry: bottomNavRegistry,
+              deviceWidthState: widthState,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                floatingActionButton: DuoTabBar(
+                  useIndependence: true,
+                  child: FloatingActionButton(
+                    onPressed: () => fabClickCount++,
+                    tooltip: 'Increment',
+                    child: const Icon(Icons.add),
+                  ),
                 ),
-              ),
-              bottomNavigationBar: DuoTabBar(
-                useIndependence: false,
-                child: BottomNavigationBar(
-                  currentIndex: tabIndex,
-                  onTap: (index) => tabIndex = index,
-                  items: const <BottomNavigationBarItem>[
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.search),
-                      label: 'Search',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // BOTH sources coexist simultaneously without overwriting or disappearing!
-      expect(registry.registeredSourceCount, 2);
-
-      // FAB is primary & independent
-      final fabAction = registry.activeActions.firstWhere(
-        (a) => a.role == AppActionRole.primary,
-      );
-      expect(fabAction.isIndependent, true);
-      expect(fabAction.label, 'Increment');
-
-      fabAction.onPressed();
-      expect(fabClickCount, 1);
-
-      // Tab destinations are attached (not independent)
-      final tabDestinations = registry.activeActions.where(
-        (a) => a.role == AppActionRole.destination,
-      ).toList();
-      expect(tabDestinations, hasLength(2));
-      expect(tabDestinations[0].isIndependent, false);
-      expect(tabDestinations[1].isIndependent, false);
-
-      registry.dispose();
-    });
-
-    testWidgets('handles NavigationBar and selection callback correctly', (
-      tester,
-    ) async {
-      final DeviceWidthState widthState = DeviceWidthState(true);
-      final AppActionRegistry registry = AppActionRegistry();
-      int? selectedIndex;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppActionScope(
-            isIphoneDuo: true,
-            registry: registry,
-            deviceWidthState: widthState,
-            iconRasterizer: mockRasterizer,
-            child: Scaffold(
-              bottomNavigationBar: DuoTabBar(
-                useIndependence: false,
-                child: NavigationBar(
-                  selectedIndex: 0,
-                  onDestinationSelected: (index) => selectedIndex = index,
-                  destinations: const <NavigationDestination>[
-                    NavigationDestination(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings),
-                      label: 'Settings',
-                    ),
-                  ],
+                bottomNavigationBar: DuoTabBar(
+                  useIndependence: false,
+                  child: BottomNavigationBar(
+                    currentIndex: tabIndex,
+                    onTap: (index) => tabIndex = index,
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.search),
+                        label: 'Search',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(registry.registeredSourceCount, 1);
-      expect(registry.activeActions, hasLength(2));
-      expect(registry.activeActions[0].isSelected, true);
-      expect(registry.activeActions[1].isSelected, false);
+        // FAB is hosted in AppActionRegistry as a primary action.
+        expect(find.byType(FloatingActionButton), findsNothing);
+        expect(registry.registeredSourceCount, 1);
+        final AppAction fabAction = registry.activeActions.single;
+        expect(fabAction.role, AppActionRole.primary);
+        expect(fabAction.isIndependent, isTrue);
+        expect(fabAction.label, 'Increment');
 
-      registry.activeActions[1].onPressed();
-      expect(selectedIndex, 1);
+        fabAction.onPressed();
+        expect(fabClickCount, 1);
 
-      registry.dispose();
-    });
+        // BottomNavigationBar is simultaneously hosted in DuoBottomNavRegistry.
+        expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(bottomNavRegistry.registeredSourceCount, 1);
+        final DuoBottomNavEntry? navEntry = bottomNavRegistry.activeEntry;
+        expect(navEntry, isNotNull);
+        expect(navEntry!.items, hasLength(2));
+        expect(navEntry.useIndependence, isFalse);
+
+        navEntry.onSelected?.call(1);
+        expect(tabIndex, 1);
+
+        widthState.dispose();
+        bottomNavRegistry.dispose();
+        registry.dispose();
+      },
+    );
+
+    testWidgets(
+      'keeps FloatingActionButton rendered in Flutter on non-Duo large screens',
+      (tester) async {
+        final DeviceWidthState widthState = DeviceWidthState(true);
+        final AppActionRegistry registry = AppActionRegistry();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppActionScope(
+              isIphoneDuo: false,
+              registry: registry,
+              deviceWidthState: widthState,
+              useModernMaterial: true,
+              iconRasterizer: mockRasterizer,
+              child: Scaffold(
+                floatingActionButton: DuoTabBar(
+                  useIndependence: true,
+                  child: FloatingActionButton(
+                    onPressed: () {},
+                    tooltip: 'Increment',
+                    child: const Icon(Icons.add),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(registry.registeredSourceCount, 0);
+
+        widthState.dispose();
+        registry.dispose();
+      },
+    );
   });
 }

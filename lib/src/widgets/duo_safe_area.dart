@@ -392,11 +392,7 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
           final Widget built = app.builder != null
               ? app.builder!(context, child)
               : (child ?? const SizedBox.shrink());
-          return _wrapPage(
-            built,
-            useModernMaterial: true,
-            isRouterRoot: true,
-          );
+          return _wrapPage(built, useModernMaterial: true, isRouterRoot: true);
         },
         title: app.title,
         onGenerateTitle: app.onGenerateTitle,
@@ -508,11 +504,7 @@ class _DuoSafeAreaState extends State<DuoSafeArea> {
           final Widget built = app.builder != null
               ? app.builder!(context, child)
               : (child ?? const SizedBox.shrink());
-          return _wrapPage(
-            built,
-            useModernMaterial: false,
-            isRouterRoot: true,
-          );
+          return _wrapPage(built, useModernMaterial: false, isRouterRoot: true);
         },
         title: app.title,
         onGenerateTitle: app.onGenerateTitle,
@@ -782,10 +774,8 @@ class _DuoPageWrapperState extends State<_DuoPageWrapper>
 
   Future<void> _queryBarInsets() async {
     try {
-      final Map<Object?, Object?>? res =
-          await _deviceChannel.invokeMethod<Map<Object?, Object?>>(
-            'getBarLayoutInsets',
-          );
+      final Map<Object?, Object?>? res = await _deviceChannel
+          .invokeMethod<Map<Object?, Object?>>('getBarLayoutInsets');
       if (!mounted || res == null) return;
       final double top = (res['top'] as num?)?.toDouble() ?? 0.0;
       final double bottom = (res['bottom'] as num?)?.toDouble() ?? 16.0;
@@ -886,9 +876,7 @@ const Key _rightSafeAreaBackgroundKey = ValueKey<String>(
 const Key _verticalBottomNavKey = ValueKey<String>(
   'duoSafeArea.verticalBottomNav',
 );
-const Key _navigationRailKey = ValueKey<String>(
-  'duoSafeArea.navigationRail',
-);
+const Key _navigationRailKey = ValueKey<String>('duoSafeArea.navigationRail');
 const Key _expandedPageChildKey = ValueKey<String>(
   'duoSafeArea.expandedPageChild',
 );
@@ -983,10 +971,7 @@ Widget _nonDuoLargeScreenNavigationRail(
               const legacy_material.VerticalDivider(thickness: 1, width: 1),
             ],
           ],
-          Expanded(
-            key: _expandedPageChildKey,
-            child: child,
-          ),
+          Expanded(key: _expandedPageChildKey, child: child),
         ],
       );
     },
@@ -1018,8 +1003,7 @@ Widget _duoToolbarSafeArea(
       }
 
       final EdgeInsets padding = MediaQuery.paddingOf(context);
-      final bool isLeftEdge =
-          padding.left > padding.right && padding.left > 0;
+      final bool isLeftEdge = padding.left > padding.right && padding.left > 0;
       final double sideStripWidth = isLeftEdge
           ? padding.left
           : (padding.right > 0 ? padding.right : 68.0);
@@ -1036,8 +1020,9 @@ Widget _duoToolbarSafeArea(
       } else {
         minBottomInset = 16.0;
       }
-      final double bottomInset =
-          padding.bottom > minBottomInset ? padding.bottom : minBottomInset;
+      final double bottomInset = padding.bottom > minBottomInset
+          ? padding.bottom
+          : minBottomInset;
 
       return Stack(
         fit: StackFit.expand,

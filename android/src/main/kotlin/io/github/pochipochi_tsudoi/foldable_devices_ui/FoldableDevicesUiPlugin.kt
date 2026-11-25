@@ -1,4 +1,4 @@
-package com.example.foldable_devices_ui
+package io.github.pochipochi_tsudoi.foldable_devices_ui
 
 import android.content.Context
 import android.hardware.Sensor

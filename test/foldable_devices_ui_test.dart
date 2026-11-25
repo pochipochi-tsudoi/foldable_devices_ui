@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foldable_devices_ui/foldable_devices_ui.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -217,6 +217,51 @@ void main() {
     expect(safeArea.bottom, isFalse);
   });
 
+  testWidgets('supports MaterialApp.router on iPhone Duo', (tester) async {
+    setDuoResult(true);
+    await tester.pumpWidget(
+      DuoSafeArea(
+        backgroundColor: Colors.black,
+        child: MaterialApp.router(
+          routerConfig: RouterConfig<Object>(
+            routerDelegate: _SimpleRouterDelegate(const _RegularPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey<String>('regular-page')),
+        matching: find.byType(SafeArea),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'hosts leading NavigationRail on non-Duo large screens when DuoTabBar wraps BottomNavigationBar',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      setDuoResult(false);
+      await tester.pumpWidget(
+        const DuoSafeArea(child: MaterialApp(home: _TabPage())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('duoSafeArea.navigationRail')),
+        findsOneWidget,
+      );
+      expect(find.byType(BottomNavigationBar), findsNothing);
+    },
+  );
+
   testWidgets(
     'keeps DuoVerticalBottomNav fixed at bottom on Inner Display half-screen (left/right only)',
     (tester) async {
@@ -295,6 +340,28 @@ void main() {
       expect(tester.widget<Positioned>(verticalNav).bottom, 16.0);
     },
   );
+}
+
+class _SimpleRouterDelegate extends RouterDelegate<Object>
+    with ChangeNotifier, PopNavigatorRouterDelegateMixin<Object> {
+  _SimpleRouterDelegate(this.child);
+
+  final Widget child;
+
+  @override
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      key: navigatorKey,
+      pages: <Page<void>>[MaterialPage<void>(child: child)],
+      onDidRemovePage: (_) {},
+    );
+  }
+
+  @override
+  Future<void> setNewRoutePath(Object configuration) async {}
 }
 
 class _TabPage extends StatelessWidget {

@@ -31,3 +31,6 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+android/.gradle/
+android/build/
+ios/foldable_devices_ui/.build/

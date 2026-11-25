@@ -435,7 +435,10 @@ Future<_ActionBuildResult> _buildActions(
 }) async {
   final _IconRenderEnvironment environment = _IconRenderEnvironment(
     iconTheme: IconTheme.of(context),
-    fallbackColor: _resolveOnSurfaceColor(context, useModern: useModernMaterial),
+    fallbackColor: _resolveOnSurfaceColor(
+      context,
+      useModern: useModernMaterial,
+    ),
     textDirection: Directionality.of(context),
     textScaler: MediaQuery.textScalerOf(context),
     pixelRatio: MediaQuery.devicePixelRatioOf(context),
